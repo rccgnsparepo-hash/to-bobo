@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { Avatar } from "@/components/Avatar";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useOnlinePresence } from "@/lib/presence";
+import { getAllChatDrafts } from "@/lib/chatDraft";
 
 type Profile = {
   id: string;
@@ -29,6 +30,9 @@ export default function MessagesPage() {
   const [people, setPeople] = useState<Profile[]>([]);
   const [metaMap, setMetaMap] = useState<Record<string, ConversationMeta>>({});
   const [typingMap, setTypingMap] = useState<Record<string, boolean>>({});
+  const [draftsMap, setDraftsMap] = useState<
+    Record<string, { text?: string; hasVn?: boolean; vnDuration?: number; updatedAt: number }>
+  >(() => getAllChatDrafts());
   const [q, setQ] = useState("");
   const { pathname } = useLocation();
   const showList = pathname === "/messages";
@@ -136,25 +140,37 @@ export default function MessagesPage() {
       }
     };
 
+    const refreshDrafts = () => {
+      setDraftsMap(getAllChatDrafts());
+    };
+
     window.addEventListener("flick:dm-unread-updated", onDmUpdate);
     window.addEventListener("flick:dm-typing-update", onTypingUpdate);
     window.addEventListener("flick:presence-update", onDmUpdate);
+    window.addEventListener("flick:chat-draft-updated", refreshDrafts);
+    window.addEventListener("storage", refreshDrafts);
 
     // Fast fallback refresh interval for active chat list
-    const interval = setInterval(loadConversations, 5000);
+    const interval = setInterval(() => {
+      loadConversations();
+      refreshDrafts();
+    }, 5000);
 
     return () => {
       window.removeEventListener("flick:dm-unread-updated", onDmUpdate);
       window.removeEventListener("flick:dm-typing-update", onTypingUpdate);
       window.removeEventListener("flick:presence-update", onDmUpdate);
+      window.removeEventListener("flick:chat-draft-updated", refreshDrafts);
+      window.removeEventListener("storage", refreshDrafts);
       clearInterval(interval);
     };
   }, [user?.id]);
 
   // Sort contacts:
   // 1. Unread conversations first, ordered by recent message time desc (newest unread is #1)!
-  // 2. Read conversations ordered by recent message time desc!
-  // 3. Contacts without messages alphabetically.
+  // 2. Draft conversations next (so unsent work is immediately visible)!
+  // 3. Read conversations ordered by recent message time desc!
+  // 4. Contacts without messages alphabetically.
   const sortedPeople = useMemo(() => {
     return [...people].sort((a, b) => {
       const metaA = metaMap[a.id];
@@ -170,17 +186,26 @@ export default function MessagesPage() {
       if (unreadA > 0 && unreadB === 0) return -1;
       if (unreadB > 0 && unreadA === 0) return 1;
 
-      // 2. Both unread or both read: sort by latest message time
+      // 2. Draft priority (if conversation has unsent draft)
+      const draftA = draftsMap[a.id];
+      const draftB = draftsMap[b.id];
+      const hasDraftA = Boolean(draftA && (draftA.text || draftA.hasVn));
+      const hasDraftB = Boolean(draftB && (draftB.text || draftB.hasVn));
+
+      if (hasDraftA && !hasDraftB) return -1;
+      if (hasDraftB && !hasDraftA) return 1;
+
+      // 3. Both unread or both read: sort by latest message time
       const timeA = metaA?.lastTime || 0;
       const timeB = metaB?.lastTime || 0;
       if (timeA !== timeB) {
         return timeB - timeA;
       }
 
-      // 3. Fallback: alphabetical by display name
+      // 4. Fallback: alphabetical by display name
       return a.display_name.localeCompare(b.display_name);
     });
-  }, [people, metaMap]);
+  }, [people, metaMap, draftsMap]);
 
   const filtered = sortedPeople.filter(
     (p) =>
@@ -237,6 +262,20 @@ export default function MessagesPage() {
                       <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                       <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                     </span>
+                  ),
+                };
+              }
+
+              // Check if an unsent draft exists for this conversation
+              const draft = draftsMap[p.id];
+              if (draft && (draft.text || draft.hasVn)) {
+                return {
+                  text: draft.hasVn
+                    ? `Draft: 🎙️ Voice note (${draft.vnDuration || 0}s)`
+                    : `Draft: ${draft.text}`,
+                  color: "text-amber-400 font-semibold",
+                  icon: (
+                    <span className="w-2 h-2 rounded-full bg-amber-400 mr-1.5 shrink-0 shadow-sm shadow-amber-400/50" />
                   ),
                 };
               }

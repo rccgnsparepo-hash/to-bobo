@@ -24,6 +24,10 @@ import {
   Flame,
   Zap,
   ZoomIn,
+  Play,
+  Pause,
+  Bookmark,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -38,6 +42,14 @@ import { MicPermissionModal } from "@/components/chat/MicPermissionModal";
 import { QuickRepliesBar } from "@/components/chat/QuickRepliesBar";
 import { MediaViewerModal } from "@/components/chat/MediaViewerModal";
 import { downloadMedia } from "@/lib/downloadMedia";
+import {
+  saveChatTextDraft,
+  getChatTextDraft,
+  clearChatTextDraft,
+  saveChatVnDraft,
+  getChatVnDraft,
+  clearChatVnDraft,
+} from "@/lib/chatDraft";
 import {
   getSupportedAudioMimeType,
   classifyMicError,
@@ -85,7 +97,19 @@ export default function ThreadPage() {
   const { user, profile } = useAuth();
   const [other, setOther] = useState<Profile | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => (userId ? getChatTextDraft(userId) : ""));
+  // Voice note (VN) unsent draft state
+  const [vnDraft, setVnDraft] = useState<{ blob: Blob; url: string; duration: number } | null>(null);
+  const [vnDraftPlaying, setVnDraftPlaying] = useState(false);
+  const [sendingVnDraft, setSendingVnDraft] = useState(false);
+
+  const textRef = useRef<string>(text);
+  const isRecordingRef = useRef<boolean>(false);
+  const recordSecondsRef = useRef<number>(0);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const vnAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
   const [bg, setBg] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState<number>(1);
   const [fontFamily, setFontFamily] = useState<string>("system");
@@ -297,6 +321,57 @@ export default function ThreadPage() {
     };
   }, [userId, user?.id, typingRoomId]);
 
+  // Keep refs synchronized for beforeunload/unmount draft persistence
+  useEffect(() => {
+    textRef.current = text;
+  }, [text]);
+
+  useEffect(() => {
+    isRecordingRef.current = recording;
+  }, [recording]);
+
+  useEffect(() => {
+    recordSecondsRef.current = recordSeconds;
+  }, [recordSeconds]);
+
+  // Load unsent text draft and voice note draft on mount / conversation switch
+  useEffect(() => {
+    if (!userId) return;
+    const savedDraftText = getChatTextDraft(userId);
+    setText(savedDraftText);
+    textRef.current = savedDraftText;
+
+    void getChatVnDraft(userId).then((draft) => {
+      setVnDraft(draft);
+    });
+  }, [userId]);
+
+  // Auto-save drafts when leaving page or unmounting so text and VNs are not lost
+  useEffect(() => {
+    const handleLeave = () => {
+      if (userId && textRef.current?.trim()) {
+        saveChatTextDraft(userId, textRef.current);
+      }
+      // If user was actively recording when leaving, capture and save the voice note draft!
+      if (userId && isRecordingRef.current && chunksRef.current.length > 0) {
+        const mimeType = recorderRef.current?.mimeType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        const dur = recordSecondsRef.current || 1;
+        void saveChatVnDraft(userId, blob, dur);
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach((t) => t.stop());
+          audioStreamRef.current = null;
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleLeave);
+    return () => {
+      window.removeEventListener("beforeunload", handleLeave);
+      handleLeave();
+    };
+  }, [userId]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.length, peerTyping]);
@@ -342,6 +417,10 @@ export default function ThreadPage() {
         )
       : null;
     setText("");
+    textRef.current = "";
+    if (userId) {
+      clearChatTextDraft(userId);
+    }
     setReplyTo(null);
     setShowEmojiPicker(false);
     if (isActivelyTypingRef.current) {
@@ -507,6 +586,10 @@ export default function ThreadPage() {
 
   const onType = (v: string) => {
     setText(v);
+    textRef.current = v;
+    if (userId) {
+      saveChatTextDraft(userId, v);
+    }
     if (!user || !userId) return;
 
     if (!v.trim()) {
@@ -658,46 +741,96 @@ export default function ThreadPage() {
     }
   };
 
-  const recordVoice = async () => {
-    if (recording) {
-      recorderRef.current?.stop();
-      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
-      setRecording(false);
-      setRecordSeconds(0);
-      return;
+  const togglePlayVnDraft = () => {
+    if (!vnDraft) return;
+    if (vnDraftPlaying) {
+      if (vnAudioPlayerRef.current) {
+        vnAudioPlayerRef.current.pause();
+      }
+      setVnDraftPlaying(false);
+    } else {
+      if (!vnAudioPlayerRef.current || vnAudioPlayerRef.current.src !== vnDraft.url) {
+        if (vnAudioPlayerRef.current) {
+          vnAudioPlayerRef.current.pause();
+        }
+        const audio = new Audio(vnDraft.url);
+        audio.onended = () => setVnDraftPlaying(false);
+        audio.onerror = () => setVnDraftPlaying(false);
+        vnAudioPlayerRef.current = audio;
+      }
+      void vnAudioPlayerRef.current.play();
+      setVnDraftPlaying(true);
     }
+  };
+
+  const discardVnDraft = async () => {
+    if (vnAudioPlayerRef.current) {
+      vnAudioPlayerRef.current.pause();
+    }
+    setVnDraftPlaying(false);
+    if (userId) {
+      await clearChatVnDraft(userId);
+    }
+    setVnDraft(null);
+    toast("Voice note draft discarded");
+  };
+
+  const sendVnDraft = async () => {
+    if (!userId || !vnDraft) return;
+    if (vnAudioPlayerRef.current) {
+      vnAudioPlayerRef.current.pause();
+    }
+    setVnDraftPlaying(false);
+    setSendingVnDraft(true);
+    try {
+      const { extension } = getSupportedAudioMimeType();
+      const file = new File([vnDraft.blob], `voice-${Date.now()}.${extension}`, {
+        type: vnDraft.blob.type || "audio/webm",
+      });
+      await uploadAndSend(file, "audio");
+      await clearChatVnDraft(userId);
+      setVnDraft(null);
+      toast.success("Voice note sent!");
+    } catch (err) {
+      toast.error("Failed to send voice note");
+    } finally {
+      setSendingVnDraft(false);
+    }
+  };
+
+  const startVoiceRecording = async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("Microphone API not available in this browser context.");
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const { mimeType, extension } = getSupportedAudioMimeType();
+      audioStreamRef.current = stream;
+      const { mimeType } = getSupportedAudioMimeType();
       const options = mimeType ? { mimeType } : undefined;
       const rec = new MediaRecorder(stream, options);
-      const chunks: Blob[] = [];
+      chunksRef.current = [];
+
       rec.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
-      rec.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
-        const file = new File([blob], `voice-${Date.now()}.${extension}`, { type: mimeType || "audio/webm" });
-        await uploadAndSend(file, "audio");
-        setRecording(false);
-        setRecordSeconds(0);
-        if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
-      };
+
       rec.start(250);
       recorderRef.current = rec;
       setRecording(true);
+      isRecordingRef.current = true;
       setRecordSeconds(0);
+      recordSecondsRef.current = 0;
+      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
       recordIntervalRef.current = window.setInterval(() => {
-        setRecordSeconds((s) => s + 1);
+        setRecordSeconds((s) => {
+          recordSecondsRef.current = s + 1;
+          return s + 1;
+        });
       }, 1000);
+
       setTimeout(() => {
         if (rec.state === "recording") {
-          rec.stop();
-          if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+          void stopAndDraftVoice();
         }
       }, 120000);
     } catch (err) {
@@ -705,6 +838,98 @@ export default function ThreadPage() {
       setMicErrorInfo(info);
       setMicModalOpen(true);
       toast.error(info.title, { description: info.message });
+    }
+  };
+
+  const stopAndSendVoice = async () => {
+    if (!userId || !recorderRef.current) return;
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    const rec = recorderRef.current;
+
+    rec.onstop = async () => {
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop());
+        audioStreamRef.current = null;
+      }
+      const { mimeType, extension } = getSupportedAudioMimeType();
+      const blob = new Blob(chunksRef.current, { type: mimeType || "audio/webm" });
+      const file = new File([blob], `voice-${Date.now()}.${extension}`, {
+        type: mimeType || "audio/webm",
+      });
+      await uploadAndSend(file, "audio");
+      await clearChatVnDraft(userId);
+      setVnDraft(null);
+      chunksRef.current = [];
+      setRecording(false);
+      isRecordingRef.current = false;
+      setRecordSeconds(0);
+      recordSecondsRef.current = 0;
+    };
+
+    if (rec.state !== "inactive") {
+      rec.stop();
+    }
+  };
+
+  const stopAndDraftVoice = async () => {
+    if (!userId || !recorderRef.current) return;
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    const rec = recorderRef.current;
+    const dur = recordSecondsRef.current || 1;
+
+    rec.onstop = async () => {
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop());
+        audioStreamRef.current = null;
+      }
+      const { mimeType } = getSupportedAudioMimeType();
+      const blob = new Blob(chunksRef.current, { type: mimeType || "audio/webm" });
+      await saveChatVnDraft(userId, blob, dur);
+      const draft = await getChatVnDraft(userId);
+      setVnDraft(draft);
+      chunksRef.current = [];
+      setRecording(false);
+      isRecordingRef.current = false;
+      setRecordSeconds(0);
+      recordSecondsRef.current = 0;
+      toast.success("Voice note saved as draft! It won't be lost when leaving.");
+    };
+
+    if (rec.state !== "inactive") {
+      rec.stop();
+    }
+  };
+
+  const cancelRecordingVoice = () => {
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach((t) => t.stop());
+      audioStreamRef.current = null;
+    }
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+    }
+    chunksRef.current = [];
+    setRecording(false);
+    isRecordingRef.current = false;
+    setRecordSeconds(0);
+    recordSecondsRef.current = 0;
+  };
+
+  const recordVoice = async () => {
+    if (recording) {
+      await stopAndSendVoice();
+    } else {
+      await startVoiceRecording();
     }
   };
 
@@ -1482,6 +1707,65 @@ export default function ThreadPage() {
         )}
       </AnimatePresence>
 
+      {/* Unsent Voice Note Draft Bar */}
+      <AnimatePresence>
+        {vnDraft && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: 10, height: 0 }}
+            className="sticky bottom-[60px] z-20 mx-3 sm:mx-4 mb-2 p-2.5 rounded-2xl bg-[#141828]/95 border border-amber-500/40 backdrop-blur-xl flex items-center justify-between gap-3 shadow-2xl"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={togglePlayVnDraft}
+                className="w-8 h-8 rounded-full bg-amber-400 text-black flex items-center justify-center hover:scale-105 active:scale-95 transition shrink-0 shadow"
+                title={vnDraftPlaying ? "Pause voice note preview" : "Play voice note draft"}
+              >
+                {vnDraftPlaying ? (
+                  <Pause className="w-4 h-4 fill-current" />
+                ) : (
+                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                )}
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                    <Mic className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Unsent Voice Note Draft</span>
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-mono font-bold">
+                    {Math.floor(vnDraft.duration / 60)}:{String(vnDraft.duration % 60).padStart(2, "0")}
+                  </span>
+                </div>
+                <p className="text-[10px] text-zinc-400 truncate">Saved draft in storage · ready to send</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={discardVnDraft}
+                className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                title="Discard voice draft"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={sendVnDraft}
+                disabled={sendingVnDraft}
+                className="px-3.5 py-1.5 rounded-full bg-amber-400 text-black text-xs font-extrabold flex items-center gap-1.5 hover:brightness-110 active:scale-95 transition shadow-sm disabled:opacity-50"
+              >
+                <Send className="w-3 h-3 stroke-[2.5]" />
+                <span>Send</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Bottom Floating Composer Rebrand */}
       <form
         onSubmit={(e) => {
@@ -1527,21 +1811,38 @@ export default function ThreadPage() {
           onChange={(e) => e.target.files?.[0] && uploadAndSend(e.target.files[0], "file")}
         />
 
-        {/* Voice Note Recording Button with Live Timer */}
+        {/* Voice Note Recording Controls with Live Timer & Save Draft */}
         {recording ? (
-          <div className="flex-1 flex items-center gap-2 bg-red-950/40 border border-red-500/50 rounded-full px-4 py-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-            <span className="text-xs font-mono font-bold text-red-400">
-              Recording {Math.floor(recordSeconds / 60)}:
-              {String(recordSeconds % 60).padStart(2, "0")}
+          <div className="flex-1 flex items-center gap-2 bg-red-950/40 border border-red-500/50 rounded-full px-3 py-1.5 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping shrink-0" />
+            <span className="text-xs font-mono font-bold text-red-400 shrink-0">
+              {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}
             </span>
             <div className="flex-1" />
             <button
               type="button"
-              onClick={recordVoice}
-              className="px-3 py-1 bg-red-500 text-white rounded-full text-xs font-bold shadow hover:bg-red-600 transition"
+              onClick={cancelRecordingVoice}
+              className="p-1.5 text-zinc-400 hover:text-white rounded-full transition"
+              title="Cancel recording"
             >
-              Stop & Send
+              <X className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={stopAndDraftVoice}
+              className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold hover:bg-amber-500/30 transition flex items-center gap-1"
+              title="Save voice note as draft to review or send later"
+            >
+              <Bookmark className="w-3 h-3 text-amber-300" />
+              <span className="hidden sm:inline">Save Draft</span>
+            </button>
+            <button
+              type="button"
+              onClick={stopAndSendVoice}
+              className="px-3 py-1 bg-red-500 text-white rounded-full text-xs font-bold shadow hover:bg-red-600 transition flex items-center gap-1"
+            >
+              <span>Send</span>
+              <Send className="w-3 h-3 stroke-[2.5]" />
             </button>
           </div>
         ) : (

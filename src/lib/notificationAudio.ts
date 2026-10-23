@@ -7,7 +7,7 @@
 
 import { playSound } from "./soundEngine";
 
-export type NotificationKind = "message" | "like" | "comment" | "story" | "post" | "mention" | "system";
+export type NotificationKind = "message" | "like" | "comment" | "story" | "post" | "mention" | "system" | "news";
 
 export interface CallerInfo {
   id?: string | null;
@@ -26,7 +26,8 @@ export const SOUND_FILE_MAP: Record<string, string> = {
   like: `${CUSTOM_SOUNDS_BASE}/like-notification.mp3`,
   comment: `${CUSTOM_SOUNDS_BASE}/comment-notification.mp3`,
   story: `${CUSTOM_SOUNDS_BASE}/story-notification.mp3`,
-  general: `${CUSTOM_SOUNDS_BASE}/notification.mp3`,
+  general: `${CUSTOM_SOUNDS_BASE}/notification.wav`,
+  news: `${CUSTOM_SOUNDS_BASE}/news-wire-push.wav`,
 };
 
 class NotificationAudioEngine {

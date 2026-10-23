@@ -11,6 +11,8 @@ import {
   RotateCcw,
   Sparkles,
   CheckCircle2,
+  Bookmark,
+  Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +22,13 @@ import { notify } from "@/lib/notify";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 import { UploadProgress, type UploadStage } from "@/components/UploadProgress";
 import { triggerLightHaptic, triggerSuccessHaptic } from "@/lib/haptics";
+import {
+  hasStoryDraft,
+  saveStoryDraft,
+  loadStoryDraft,
+  clearStoryDraft,
+  type StoryDraftMetadata,
+} from "@/lib/storyDraft";
 
 const MAX_RECORD_SECONDS = 30; // Maximum story recording duration
 
@@ -38,6 +47,10 @@ export default function StoryComposerPage() {
   const [busy, setBusy] = useState(false);
   const [stages, setStages] = useState<UploadStage[]>([]);
 
+  // Draft state
+  const [draftAvailable, setDraftAvailable] = useState<StoryDraftMetadata | null>(null);
+  const [draftSavedToast, setDraftSavedToast] = useState(false);
+
   // Recording State & Duration Tracking
   const [recording, setRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
@@ -54,6 +67,108 @@ export default function StoryComposerPage() {
   const chunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<number | null>(null);
   const uploadTimerRef = useRef<number | null>(null);
+
+  // Check for saved draft in localStorage on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const draft = await loadStoryDraft();
+        if (draft && draft.metadata) {
+          setDraftAvailable(draft.metadata);
+        }
+      } catch (err) {
+        console.warn("Failed to check story draft:", err);
+      }
+    })();
+  }, []);
+
+  const resumeDraft = async () => {
+    void triggerLightHaptic();
+    try {
+      const res = await loadStoryDraft();
+      if (!res) return;
+      setTab(res.metadata.tab);
+      setFacing(res.metadata.facing);
+      setRecordDuration(res.metadata.recordDuration);
+      if (res.videoBlob && res.videoUrl) {
+        const ext = res.metadata.mimeType?.includes("mp4") ? "mp4" : "webm";
+        const file = new File(
+          [res.videoBlob],
+          res.metadata.fileName || `draft-recording-${Date.now()}.${ext}`,
+          { type: res.metadata.mimeType || "video/webm" }
+        );
+        setFiles([file]);
+        setRecordedVideoUrl(res.videoUrl);
+      }
+      setDraftAvailable(null);
+      toast.success("Story draft resumed! You can continue recording or post.");
+    } catch (err) {
+      toast.error("Failed to load draft.");
+    }
+  };
+
+  const discardDraft = async () => {
+    void triggerLightHaptic();
+    await clearStoryDraft();
+    setDraftAvailable(null);
+    toast("Story draft discarded.");
+  };
+
+  const saveCurrentDraft = async () => {
+    void triggerLightHaptic();
+    try {
+      let videoBlobToSave: Blob | null = null;
+      const dur = recordDuration;
+
+      if (recording) {
+        stopRecording();
+      }
+
+      if (files.length > 0) {
+        videoBlobToSave = files[0];
+      } else if (chunksRef.current.length > 0) {
+        videoBlobToSave = new Blob(chunksRef.current, { type: "video/webm" });
+      }
+
+      await saveStoryDraft({
+        tab,
+        recordDuration: dur,
+        facing,
+        videoBlob: videoBlobToSave,
+        fileName: files[0]?.name,
+      });
+
+      setDraftSavedToast(true);
+      setTimeout(() => setDraftSavedToast(false), 3000);
+      toast.success("Story draft saved to localStorage! You can resume recording later.");
+    } catch (err) {
+      toast.error("Failed to save draft.");
+    }
+  };
+
+  // Auto-save draft when navigating away or unmounting if unsaved work exists
+  useEffect(() => {
+    const onLeave = () => {
+      if (files.length > 0 || chunksRef.current.length > 0 || (tab === "record" && recordDuration > 0)) {
+        const blob =
+          files[0] ||
+          (chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: "video/webm" }) : null);
+        void saveStoryDraft({
+          tab,
+          recordDuration,
+          facing,
+          videoBlob: blob,
+          fileName: files[0]?.name,
+        });
+      }
+    };
+
+    window.addEventListener("beforeunload", onLeave);
+    return () => {
+      window.removeEventListener("beforeunload", onLeave);
+      onLeave();
+    };
+  }, [tab, recordDuration, facing, files]);
 
   // Start/Stop Camera Stream when in "record" tab
   useEffect(() => {
@@ -298,6 +413,8 @@ export default function StoryComposerPage() {
         url: "/",
       });
 
+      await clearStoryDraft();
+
       setTimeout(() => {
         setStages([]);
         nav("/");
@@ -375,6 +492,7 @@ export default function StoryComposerPage() {
         <button
           onClick={() => nav("/")}
           className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition"
+          title="Back to feed"
         >
           <X className="w-5 h-5" />
         </button>
@@ -382,21 +500,96 @@ export default function StoryComposerPage() {
           <h1 className="font-display text-xl font-bold tracking-tight">New Story</h1>
           <p className="text-[11px] text-muted-foreground">Disappears after 24 hours</p>
         </div>
-        <button
-          onClick={submit}
-          disabled={busy || files.length === 0}
-          className="px-5 py-1.5 rounded-full bg-snap text-snap-foreground font-extrabold text-xs disabled:opacity-40 shadow-md hover:opacity-95 active:scale-95 transition"
-        >
-          {busy ? (
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full border-2 border-snap-foreground border-t-transparent animate-spin" />
-              <span>{Math.round(overallUploadProgress)}%</span>
-            </span>
-          ) : (
-            "Post Story"
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={saveCurrentDraft}
+            disabled={busy || (files.length === 0 && !recording && recordDuration === 0 && !recordedVideoUrl)}
+            className={`px-3 py-1.5 rounded-full border border-border/80 text-xs font-bold transition flex items-center gap-1.5 ${
+              draftSavedToast
+                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/50"
+                : "hover:border-snap/80 text-muted-foreground hover:text-foreground hover:bg-secondary/60 disabled:opacity-30"
+            }`}
+            title="Save composition as draft in localStorage"
+          >
+            {draftSavedToast ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Saved</span>
+              </>
+            ) : (
+              <>
+                <Bookmark className="w-3.5 h-3.5 text-snap" />
+                <span className="hidden sm:inline">Save Draft</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={submit}
+            disabled={busy || files.length === 0}
+            className="px-5 py-1.5 rounded-full bg-snap text-snap-foreground font-extrabold text-xs disabled:opacity-40 shadow-md hover:opacity-95 active:scale-95 transition"
+          >
+            {busy ? (
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border-2 border-snap-foreground border-t-transparent animate-spin" />
+                <span>{Math.round(overallUploadProgress)}%</span>
+              </span>
+            ) : (
+              "Post Story"
+            )}
+          </button>
+        </div>
       </header>
+
+      {/* Unsaved Draft Resume Banner */}
+      <AnimatePresence>
+        {draftAvailable && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mb-4 p-3.5 rounded-2xl bg-[#141724] border border-snap/40 backdrop-blur-md flex items-center justify-between gap-3 shadow-xl"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-snap/15 border border-snap/30 text-snap flex items-center justify-center shrink-0 shadow-inner">
+                <Bookmark className="w-4 h-4 fill-snap/30" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>Resume Saved Draft</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-snap/20 text-snap font-mono uppercase">
+                    localStorage
+                  </span>
+                </p>
+                <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+                  {draftAvailable.hasRecordedVideo
+                    ? `Recorded clip (${formatDuration(draftAvailable.recordDuration)})`
+                    : draftAvailable.tab === "photos"
+                    ? "Bulk photos draft"
+                    : "Video draft"} · Saved {new Date(draftAvailable.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                title="Discard draft"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={resumeDraft}
+                className="px-3.5 py-1.5 rounded-full bg-snap text-black text-xs font-extrabold hover:brightness-110 active:scale-95 transition shadow-sm"
+              >
+                Resume
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Mode selection tabs */}
       <div className="flex gap-2 mb-4 bg-secondary/40 p-1 rounded-full border border-border/60">
@@ -518,23 +711,33 @@ export default function StoryComposerPage() {
                 )}
               </button>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={retakeRecording}
-                  className="px-4 py-2 rounded-full bg-black/70 backdrop-blur border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 hover:bg-black/90 transition"
+                  className="px-3.5 py-2 rounded-full bg-black/70 backdrop-blur border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 hover:bg-black/90 transition"
+                  title="Retake recording"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Retake</span>
                 </button>
                 <button
                   type="button"
+                  onClick={saveCurrentDraft}
+                  className="px-3.5 py-2 rounded-full bg-black/70 backdrop-blur border border-snap/40 text-snap text-xs font-bold flex items-center gap-1.5 hover:bg-black/90 transition"
+                  title="Save clip as draft in localStorage"
+                >
+                  <Bookmark className="w-3.5 h-3.5" />
+                  <span>Save Draft</span>
+                </button>
+                <button
+                  type="button"
                   onClick={submit}
                   disabled={busy}
-                  className="px-5 py-2 rounded-full bg-snap text-snap-foreground text-xs font-extrabold flex items-center gap-1.5 shadow-lg hover:opacity-95 transition"
+                  className="px-4 py-2 rounded-full bg-snap text-snap-foreground text-xs font-extrabold flex items-center gap-1.5 shadow-lg hover:opacity-95 transition"
                 >
                   <Sparkles className="w-3.5 h-3.5 fill-current" />
-                  <span>Use This Clip</span>
+                  <span>Post Clip</span>
                 </button>
               </div>
             )}

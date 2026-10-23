@@ -1,15 +1,15 @@
 /**
  * Global Typography System for Flick
- * Locked to one cohesive, ultra-modern graphic sans aesthetic:
- * - Display / Headlines: Syne & Plus Jakarta Sans (punchy, high-impact, geometric)
+ * Locked to Monkisa from the Curated Typography Library:
+ * - Display / Headlines: Monkisa & Righteous (bold, Art Deco, organic rounded geometric display)
  * - Body / Text: Plus Jakarta Sans & Inter (clean, high-legibility, modern)
  */
 
 export const GLOBAL_FONT_CONFIG = {
-  fontDisplay: '"Syne", "Plus Jakarta Sans", sans-serif',
-  fontHeadline: '"Syne", "Plus Jakarta Sans", sans-serif',
+  fontDisplay: '"Monkisa", "Righteous", "Dela Gothic One", "Syne", sans-serif',
+  fontHeadline: '"Monkisa", "Righteous", "Dela Gothic One", "Syne", sans-serif',
   fontBody: '"Plus Jakarta Sans", "Inter", -apple-system, sans-serif',
-  letterSpacingHeadline: "-0.02em",
+  letterSpacingHeadline: "-0.01em",
 };
 
 export function enforceGlobalTypography() {
