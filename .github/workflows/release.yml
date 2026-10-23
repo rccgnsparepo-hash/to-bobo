@@ -1,0 +1,86 @@
+name: Create GitHub Release with Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release Tag Name (e.g. v1.0.0)"
+        required: false
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Build APK & Publish to GitHub Releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Verify Node.js
+        run: |
+          echo "Node: $(node -v)"
+          echo "NPM: $(npm -v)"
+
+      - name: Setup Java 21 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: |
+          node -v
+          npx cap sync android
+
+      - name: Assemble Android APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare Release Artifacts
+        run: |
+          mkdir -p release-assets
+          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp "android/app/build/outputs/apk/debug/app-debug.apk" "release-assets/flick-app-debug.apk"
+            cp "android/app/build/outputs/apk/debug/app-debug.apk" "release-assets/flick-app-latest.apk"
+          fi
+          ls -la release-assets/
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag_name || format('v1.0.{0}', github.run_number) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Flick Release {0}', github.ref_name) || format('Flick Release v1.0.{0}', github.run_number) }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/*.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

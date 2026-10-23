@@ -1,0 +1,57 @@
+name: Windows EXE Build & Release
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows Setup Wizard Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (v22 for Electron build compatibility)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          # Remove any Linux-generated lockfile to prevent npm bug #4828 on Windows
+          rm -f package-lock.json
+          npm install
+          # Explicitly ensure Rollup Windows native binary is installed for Vite build
+          npm install --no-save @rollup/rollup-win32-x64-msvc@4.64.6
+
+      - name: Build Web SPA (Connecting to Real Database)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://lyuwkxfqgknaddmmigek.supabase.co' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5dXdreGZxZ2tuYWRkbW1pZ2VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3MDc0MjcsImV4cCI6MjA5NDI4MzQyN30.kn51u7xeL8MLJgxdvi4-dmvmFXss8Je9ASgp595ESio' }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID || 'lyuwkxfqgknaddmmigek' }}
+        run: npm run build
+
+      - name: Build Windows Setup Wizard (NSIS Installer)
+        run: npx electron-builder --win nsis --publish never
+
+      - name: List Generated Installer
+        shell: bash
+        run: |
+          echo "=== Generated Windows Setup Installer ==="
+          ls -lh release/Flick-Setup-*.exe || ls -lh release/
+
+      - name: Upload Windows Setup Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flick-Windows-Setup-Installer
+          path: |
+            release/*-Setup-*.exe
+            release/*.blockmap
+          if-no-files-found: error
+          retention-days: 14

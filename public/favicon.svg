@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- 100% transparent background with signature lime Flick glyph -->
+  <text x="30" y="49" font-family="Syne, system-ui, Arial Black, sans-serif" font-size="46" font-weight="900" text-anchor="middle" fill="#C5E863">f</text>
+  <circle cx="46" cy="24" r="5" fill="#C5E863" />
+</svg>

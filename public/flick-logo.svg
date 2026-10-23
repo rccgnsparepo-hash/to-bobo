@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Genuine transparent background Flick logo -->
+  <g fill="#C5E863">
+    <!-- Stylized f stem and crossbar -->
+    <path d="M54 36 C54 26, 62 18, 74 18 C82 18, 88 22, 92 26 L84 38 C80 34, 76 32, 72 32 C68 32, 66 34, 66 38 L66 48 L90 48 L90 62 L66 62 L66 112 L50 112 L50 62 L34 62 L34 48 L50 48 L50 38 C50 37, 52 36, 54 36 Z" />
+    <!-- Dynamic dot accent -->
+    <circle cx="94" cy="104" r="8" fill="#C5E863" />
+  </g>
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "Flick",
+  "description": "X-style timeline meets Snapchat-style stories, filters, and disappearing chats.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
