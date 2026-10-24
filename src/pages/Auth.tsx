@@ -1,11 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { trigger3DToast } from "@/components/ui/Auth3DToast";
-import { Mail, Lock, User, ArrowRight, Loader2, Sparkles, KeyRound } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  Loader2,
+  Sparkles,
+  KeyRound,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  Check,
+  RefreshCw,
+} from "lucide-react";
 import { sendFirebasePasswordReset } from "@/lib/firebaseAuth";
+import { fireAuthConfetti } from "@/lib/confetti";
+
+type FeedbackState = {
+  type: "error" | "success" | "warning" | "info";
+  title: string;
+  message: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+} | null;
 
 export default function AuthPage() {
   const nav = useNavigate();
@@ -13,13 +38,23 @@ export default function AuthPage() {
   const [params] = useSearchParams();
   const rawNext = params.get("next") ?? "";
   const next = /^\/(?!\/)/.test(rawNext) ? rawNext : "";
-  const returnUrl = next ? window.location.origin + next : window.location.origin;
 
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [handle, setHandle] = useState("");
   const [busy, setBusy] = useState(false);
+  const [statusStep, setStatusStep] = useState<string>("");
+  const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const [isSuccessAnimated, setIsSuccessAnimated] = useState(false);
+  const [successModal, setSuccessModal] = useState<{
+    title: string;
+    description: string;
+    email: string;
+    actionLabel?: string;
+    onProceed: () => void;
+  } | null>(null);
+
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
@@ -50,40 +85,132 @@ export default function AuthPage() {
     };
   }, []);
 
+  // When already signed in or when login finishes
   useEffect(() => {
     if (!session || isRecovery) return;
-    trigger3DToast({
-      type: "success",
-      title: "Welcome back!",
-      description: "You're safely signed into Flick.",
-    });
-    if (next) window.location.replace(next);
-    else nav("/", { replace: true });
-  }, [session, isRecovery, nav, next]);
+    if (!isSuccessAnimated) {
+      trigger3DToast({
+        type: "success",
+        title: "Welcome back!",
+        description: "You're safely signed into Flick.",
+      });
+      if (next) window.location.replace(next);
+      else nav("/", { replace: true });
+    }
+  }, [session, isRecovery, nav, next, isSuccessAnimated]);
+
+  const validateInputs = (): boolean => {
+    setFeedback(null);
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes("@") || !cleanEmail.includes(".")) {
+      setFeedback({
+        type: "warning",
+        title: "Invalid Email Address",
+        message: "Please enter a valid email address (e.g. name@example.com).",
+      });
+      trigger3DToast({
+        type: "warning",
+        title: "Invalid Email Address",
+        description: "Please check your email address format.",
+      });
+      return false;
+    }
+
+    if (password.length < 6) {
+      setFeedback({
+        type: "warning",
+        title: "Password Too Short",
+        message: "Your password must contain at least 6 characters.",
+      });
+      trigger3DToast({
+        type: "warning",
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters.",
+      });
+      return false;
+    }
+
+    if (mode === "signup") {
+      const cleanHandle = handle.trim().replace(/^@/, "");
+      if (cleanHandle.length < 2) {
+        setFeedback({
+          type: "warning",
+          title: "Handle Required",
+          message: "Please choose a unique @handle with at least 2 characters.",
+        });
+        trigger3DToast({
+          type: "warning",
+          title: "Handle Required",
+          description: "Choose a handle with at least 2 characters.",
+        });
+        return false;
+      }
+    }
+
+    return true;
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || isSuccessAnimated) return;
+
+    if (!validateInputs()) return;
 
     if (!navigator.onLine) {
+      // Check if user has an existing cached offline session for this email
+      try {
+        const cached = localStorage.getItem("flick:offline_auth_session");
+        if (cached && mode === "signin") {
+          const parsed = JSON.parse(cached);
+          if (
+            parsed?.user?.email?.toLowerCase() === email.trim().toLowerCase() ||
+            !email.trim()
+          ) {
+            setIsSuccessAnimated(true);
+            fireAuthConfetti();
+            setSuccessModal({
+              title: "Success!",
+              description: "Loaded your cached offline Flick profile and drafts.",
+              email: parsed?.user?.email || email.trim(),
+              actionLabel: "PROCEED OFFLINE",
+              onProceed: () => {
+                if (next) window.location.replace(next);
+                else nav("/", { replace: true });
+              },
+            });
+            return;
+          }
+        }
+      } catch {}
+
+      const errorState: FeedbackState = {
+        type: "error",
+        title: "No Internet Connection",
+        message: "Check your WiFi or mobile network connection and try again.",
+        action: {
+          label: "Retry Now",
+          onClick: () => void submit(e),
+        },
+      };
+      setFeedback(errorState);
       trigger3DToast({
         type: "error",
         title: "Connection Failed",
         description: "Check your internet connection and try again.",
-        action: {
-          label: "Retry",
-          onClick: () => {
-            void submit(e);
-          },
-        },
       });
       return;
     }
 
     setBusy(true);
+    setFeedback(null);
+    setStatusStep(mode === "signup" ? "Creating your Flick account..." : "Verifying credentials...");
+
     try {
       if (mode === "signup") {
         const cleanHandle = handle.trim().replace(/^@/, "").toLowerCase();
+        const returnUrl = next ? window.location.origin + next : window.location.origin;
+
+        setStatusStep("Registering profile & secure keys...");
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -95,67 +222,107 @@ export default function AuthPage() {
             },
           },
         });
+
         if (error) throw error;
 
-        if (data.session) {
-          trigger3DToast({
-            type: "success",
-            title: "Welcome to Flick! ⚡️",
-            description: "Your account was successfully created.",
-          });
-        } else {
-          trigger3DToast({
-            type: "info",
-            title: "Account Created",
-            description: "Please check your email to confirm your account, or sign in directly.",
-          });
-        }
+        // Sweet Success animation with confetti burst (as seen in video at 0:15!)
+        setIsSuccessAnimated(true);
+        fireAuthConfetti();
+
+        setSuccessModal({
+          title: "Success!",
+          description: data.session
+            ? "Your Flick account was created and verified."
+            : "We have sent an email verification to",
+          email: email.trim(),
+          actionLabel: "PROCEED",
+          onProceed: () => {
+            if (next) window.location.replace(next);
+            else nav("/", { replace: true });
+          },
+        });
       } else {
+        setStatusStep("Authenticating session...");
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
+
         if (error) throw error;
-        // Navigation and success toast are handled by session change listener above
-      }
-    } catch (err: unknown) {
-      const msg = (err as Error).message || "";
-      if (
-        msg.toLowerCase().includes("invalid login credentials") ||
-        msg.toLowerCase().includes("invalid grant")
-      ) {
-        trigger3DToast({
-          type: "error",
-          title: "Incorrect Email or Password",
-          description: "Double-check your credentials and try again, or reset your password.",
-        });
-      } else if (msg.toLowerCase().includes("network") || msg.toLowerCase().includes("fetch")) {
-        trigger3DToast({
-          type: "error",
-          title: "Connection Failed",
-          description: "Connection error. Check your internet connection and try again.",
-          action: {
-            label: "Retry",
-            onClick: () => {
-              void submit(e);
-            },
+
+        // Sweet Success animation with confetti burst (as seen in video at 0:15!)
+        setIsSuccessAnimated(true);
+        fireAuthConfetti();
+
+        setSuccessModal({
+          title: "Success!",
+          description: "You have securely authenticated into Flick.",
+          email: email.trim(),
+          actionLabel: "PROCEED",
+          onProceed: () => {
+            if (next) window.location.replace(next);
+            else nav("/", { replace: true });
           },
         });
-      } else {
-        trigger3DToast({
-          type: "error",
-          title: "Authentication Failed",
-          description: msg || "Unable to complete request. Please try again.",
-        });
       }
+    } catch (err: unknown) {
+      setIsSuccessAnimated(false);
+      const rawMsg = (err as Error).message || "";
+      const lower = rawMsg.toLowerCase();
+
+      let friendlyTitle = "Authentication Failed";
+      let friendlyMessage = rawMsg || "Unable to complete request. Please try again.";
+
+      if (lower.includes("invalid login credentials") || lower.includes("invalid grant")) {
+        friendlyTitle = "Incorrect Email or Password";
+        friendlyMessage =
+          "The credentials you entered do not match any Flick account. Please double-check your email and password, or use 'Forgot password' below.";
+      } else if (lower.includes("user already registered")) {
+        friendlyTitle = "Account Already Exists";
+        friendlyMessage =
+          "An account with this email is already registered. Please switch to 'Sign In' to access your account.";
+      } else if (lower.includes("rate limit") || lower.includes("too many requests")) {
+        friendlyTitle = "Too Many Attempts";
+        friendlyMessage =
+          "For your security, please wait a minute before making another sign-in attempt.";
+      } else if (lower.includes("network") || lower.includes("fetch")) {
+        friendlyTitle = "Network Connection Issue";
+        friendlyMessage =
+          "Unable to reach the authentication gateway. Please check your internet connection.";
+      }
+
+      setFeedback({
+        type: "error",
+        title: friendlyTitle,
+        message: friendlyMessage,
+        action: {
+          label: "Try Again",
+          onClick: () => {
+            setFeedback(null);
+          },
+        },
+      });
+
+      trigger3DToast({
+        type: "error",
+        title: friendlyTitle,
+        description: friendlyMessage,
+        durationMs: 7000,
+      });
     } finally {
       setBusy(false);
+      setStatusStep("");
     }
   };
 
   const handleGoogleSignIn = async () => {
     if (busy) return;
     setBusy(true);
+    setFeedback(null);
+    setStatusStep("Connecting with Google OAuth...");
+
+    const returnUrl = next ? window.location.origin + next : window.location.origin;
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -164,23 +331,27 @@ export default function AuthPage() {
         },
       });
       if (error) {
-        console.error("[Google OAuth Diagnostic] Supabase OAuth returned error:", error);
+        setFeedback({
+          type: "warning",
+          title: "Google Sign-in Notice",
+          message:
+            "Google OAuth is not configured on this instance. Please use email and password to sign in or register below.",
+        });
         trigger3DToast({
           type: "warning",
-          title: "Google Sign-in Couldn't Be Completed",
-          description:
-            "Google OAuth is not configured on this project yet. Please use email and password to sign in or register below.",
+          title: "Google Sign-in Notice",
+          description: "Please sign in or create an account using your email and password.",
         });
       }
-    } catch (err) {
-      console.error("[Google OAuth Diagnostic] OAuth Exception:", err);
-      trigger3DToast({
+    } catch {
+      setFeedback({
         type: "error",
-        title: "Google Sign-in Failed",
-        description: "Could not initiate Google authentication. Please sign in with email.",
+        title: "Google Sign-in Error",
+        message: "Unable to initiate Google authentication. Please use email and password.",
       });
     } finally {
       setBusy(false);
+      setStatusStep("");
     }
   };
 
@@ -190,6 +361,11 @@ export default function AuthPage() {
     setResetBusy(true);
     try {
       const result = await sendFirebasePasswordReset(resetEmail.trim());
+      setFeedback({
+        type: "success",
+        title: "Password Reset Sent",
+        message: result.message,
+      });
       trigger3DToast({
         type: "success",
         title: "Password Reset Sent",
@@ -211,18 +387,18 @@ export default function AuthPage() {
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
-      trigger3DToast({
+      setFeedback({
         type: "error",
         title: "Password Too Short",
-        description: "Password must be at least 6 characters.",
+        message: "Password must be at least 6 characters.",
       });
       return;
     }
     if (newPassword !== confirmPassword) {
-      trigger3DToast({
+      setFeedback({
         type: "error",
-        title: "Passwords Don't Match",
-        description: "Please confirm your new password matches.",
+        title: "Passwords Do Not Match",
+        message: "Please confirm that both passwords match exactly.",
       });
       return;
     }
@@ -230,6 +406,7 @@ export default function AuthPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
+      fireAuthConfetti();
       trigger3DToast({
         type: "success",
         title: "Password Updated! ⚡️",
@@ -240,10 +417,10 @@ export default function AuthPage() {
       setConfirmPassword("");
       nav("/", { replace: true });
     } catch (err: unknown) {
-      trigger3DToast({
+      setFeedback({
         type: "error",
         title: "Update Failed",
-        description: (err as Error).message || "Could not update password.",
+        message: (err as Error).message || "Could not update password.",
       });
     } finally {
       setUpdateBusy(false);
@@ -259,7 +436,10 @@ export default function AuthPage() {
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         className="surface-noir relative hidden md:flex flex-col justify-between p-12 overflow-hidden border-r border-white/10"
       >
-        <Link to="/" className="flex items-center gap-3 font-display text-4xl text-snap tracking-tight z-10">
+        <Link
+          to="/"
+          className="flex items-center gap-3 font-display text-4xl text-snap tracking-tight z-10"
+        >
           <img
             src="/brand/logo.png"
             alt="Logo"
@@ -268,16 +448,21 @@ export default function AuthPage() {
               (e.currentTarget as HTMLElement).style.display = "none";
             }}
           />
-          <span>FLICK<span className="text-white">.</span></span>
+          <span>
+            FLICK<span className="text-white">.</span>
+          </span>
         </Link>
-        <div className="absolute inset-0 bg-cover bg-center opacity-30 pointer-events-none mix-blend-luminosity" style={{ backgroundImage: "url('/brand/auth-template-1.png')" }} />
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-30 pointer-events-none mix-blend-luminosity"
+          style={{ backgroundImage: "url('/brand/auth-template-1.png')" }}
+        />
         <div className="absolute -left-32 top-1/4 w-[480px] h-[480px] rounded-full bg-snap/20 blur-[100px] pointer-events-none" />
         <div className="absolute -right-20 bottom-1/4 w-[360px] h-[360px] rounded-full bg-emerald-500/15 blur-[90px] pointer-events-none" />
 
         <div className="relative space-y-6 z-10 max-w-md">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-snap/15 border border-snap/30 text-snap text-xs font-bold tracking-wide">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Next-Gen Realtime Social</span>
+            <span>Next-Gen Realtime Social & Multi-Tenant</span>
           </div>
           <h1 className="font-display text-6xl xl:text-7xl leading-[0.9] text-white">
             Share
@@ -294,7 +479,7 @@ export default function AuthPage() {
           </p>
         </div>
         <div className="relative text-[11px] uppercase tracking-[0.3em] text-white/50 z-10 flex items-center justify-between">
-          <span>v2.0 · 2026 · Flick Engine</span>
+          <span>v2.2 · 2026 · Flick Engine</span>
           <span>End-to-End Realtime</span>
         </div>
       </motion.section>
@@ -306,9 +491,12 @@ export default function AuthPage() {
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         className="relative flex items-center justify-center p-6 md:p-12 overflow-y-auto"
       >
-        <div className="w-full max-w-sm space-y-6">
+        <div className="w-full max-w-md space-y-5">
           <div>
-            <Link to="/" className="md:hidden flex items-center gap-2.5 mb-6 font-display text-4xl text-snap">
+            <Link
+              to="/"
+              className="md:hidden flex items-center gap-2.5 mb-6 font-display text-4xl text-snap"
+            >
               <img
                 src="/brand/logo.png"
                 alt="Logo"
@@ -317,22 +505,120 @@ export default function AuthPage() {
                   (e.currentTarget as HTMLElement).style.display = "none";
                 }}
               />
-              <span>flick<span className="text-foreground">.</span></span>
+              <span>
+                flick<span className="text-foreground">.</span>
+              </span>
             </Link>
+
+            {/* Video-Style Tab Switcher */}
+            {!isRecovery && (
+              <div className="flex p-1 bg-secondary/80 rounded-2xl mb-4 border border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFeedback(null);
+                    setMode("signin");
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition ${
+                    mode === "signin"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFeedback(null);
+                    setMode("signup");
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition ${
+                    mode === "signup"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
+
             <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-snap">
               {isRecovery ? "Security" : mode === "signup" ? "Get Started" : "Welcome Back"}
             </span>
             <h2 className="font-display text-3xl md:text-4xl mt-1 tracking-tight">
-              {isRecovery ? "Set new password" : mode === "signup" ? "Create your account" : "Sign in to Flick"}
+              {isRecovery
+                ? "Set new password"
+                : mode === "signup"
+                  ? "Create your account"
+                  : "Sign in to Flick"}
             </h2>
             <p className="text-xs text-muted-foreground mt-1.5">
               {isRecovery
                 ? "Enter and confirm your new secure account password below."
                 : mode === "signup"
-                ? "Join the network, connect with flickers and start sharing."
-                : "Enter your credentials to access your flicks and chats."}
+                  ? "Join the network, connect with flickers and start sharing."
+                  : "Enter your credentials to access your flicks and chats."}
             </p>
           </div>
+
+          {/* PROMINENT INLINE FEEDBACK BANNER (Instant feedback for login/signup) */}
+          <AnimatePresence mode="wait">
+            {feedback && (
+              <motion.div
+                key={feedback.title}
+                initial={{ opacity: 0, y: -12, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                className={`p-4 rounded-2xl border backdrop-blur-xl relative overflow-hidden shadow-lg ${
+                  feedback.type === "error"
+                    ? "bg-red-500/15 border-red-500/40 text-red-100 shadow-red-500/10"
+                    : feedback.type === "success"
+                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-100 shadow-emerald-500/10"
+                      : feedback.type === "warning"
+                        ? "bg-amber-500/15 border-amber-500/40 text-amber-100 shadow-amber-500/10"
+                        : "bg-blue-500/15 border-blue-500/40 text-blue-100 shadow-blue-500/10"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`p-1.5 rounded-xl shrink-0 ${
+                      feedback.type === "error"
+                        ? "bg-red-500/20 text-red-400"
+                        : feedback.type === "success"
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : feedback.type === "warning"
+                            ? "bg-amber-500/20 text-amber-400"
+                            : "bg-blue-500/20 text-blue-400"
+                    }`}
+                  >
+                    {feedback.type === "error" && <AlertCircle className="w-5 h-5" />}
+                    {feedback.type === "success" && <CheckCircle2 className="w-5 h-5" />}
+                    {feedback.type === "warning" && <AlertTriangle className="w-5 h-5" />}
+                    {feedback.type === "info" && <Info className="w-5 h-5" />}
+                  </div>
+
+                  <div className="flex-1 min-w-0 pr-1">
+                    <h4 className="font-bold text-sm leading-tight">{feedback.title}</h4>
+                    <p className="text-xs mt-1 leading-relaxed opacity-90">{feedback.message}</p>
+
+                    {feedback.action && (
+                      <button
+                        type="button"
+                        onClick={feedback.action.onClick}
+                        className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition active:scale-95"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>{feedback.action.label}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {isRecovery ? (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
@@ -433,15 +719,17 @@ export default function AuthPage() {
 
               <form onSubmit={submit} className="space-y-3.5">
                 {mode === "signup" && (
-                  <div className="relative">
-                    <User className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      required
-                      value={handle}
-                      onChange={(e) => setHandle(e.target.value)}
-                      placeholder="@handle"
-                      className="w-full pl-10 pr-4 py-3 rounded-2xl bg-secondary/50 border border-border focus:outline-none focus:border-snap focus:ring-1 focus:ring-snap text-sm placeholder:text-muted-foreground transition"
-                    />
+                  <div className="space-y-1">
+                    <div className="relative">
+                      <User className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        required
+                        value={handle}
+                        onChange={(e) => setHandle(e.target.value)}
+                        placeholder="@handle (e.g. alex)"
+                        className="w-full pl-10 pr-4 py-3 rounded-2xl bg-secondary/50 border border-border focus:outline-none focus:border-snap focus:ring-1 focus:ring-snap text-sm placeholder:text-muted-foreground transition"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -482,17 +770,31 @@ export default function AuthPage() {
                   </div>
                 )}
 
+                {/* ANIMATED MORPHING SUBMIT BUTTON WITH CONFETTI SUCCESS STATE (AS SEEN IN VIDEO) */}
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  disabled={busy}
+                  disabled={busy || isSuccessAnimated}
                   type="submit"
-                  className="w-full py-3.5 rounded-2xl bg-snap text-snap-foreground font-bold text-sm disabled:opacity-60 shadow-lg shadow-snap/20 flex items-center justify-center gap-2 hover:brightness-105 transition"
+                  className={`w-full py-3.5 rounded-2xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all duration-300 ${
+                    isSuccessAnimated
+                      ? "bg-emerald-500 text-white shadow-emerald-500/40 scale-[1.02]"
+                      : "bg-snap text-snap-foreground shadow-snap/20 hover:brightness-105 disabled:opacity-60"
+                  }`}
                 >
-                  {busy ? (
-                    <>
+                  {isSuccessAnimated ? (
+                    <motion.div
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="flex items-center gap-2"
+                    >
+                      <Check className="w-5 h-5 text-white stroke-[3]" />
+                      <span>Success! Welcome to Flick</span>
+                    </motion.div>
+                  ) : busy ? (
+                    <div className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Processing...</span>
-                    </>
+                      <span>{statusStep || "Processing..."}</span>
+                    </div>
                   ) : (
                     <>
                       <span>{mode === "signup" ? "Create Flick Account" : "Sign in"}</span>
@@ -505,7 +807,10 @@ export default function AuthPage() {
               <div className="text-center pt-2">
                 <button
                   type="button"
-                  onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
+                  onClick={() => {
+                    setFeedback(null);
+                    setMode(mode === "signup" ? "signin" : "signup");
+                  }}
                   className="text-xs text-muted-foreground hover:text-foreground transition underline-offset-4 hover:underline"
                 >
                   {mode === "signup"
@@ -563,6 +868,67 @@ export default function AuthPage() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Video-Inspired Success! Modal Card (matching Video 0:15) */}
+      <AnimatePresence>
+        {successModal && (
+          <div className="fixed inset-0 z-[1100] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.88, opacity: 0, y: 24 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 16 }}
+              transition={{ type: "spring", stiffness: 450, damping: 28 }}
+              className="w-full max-w-sm rounded-[32px] p-8 shadow-2xl relative overflow-hidden text-center text-white"
+              style={{
+                background: "linear-gradient(180deg, #2546e8 0%, #162eb0 100%)",
+                boxShadow: "0 25px 60px -15px rgba(22, 46, 176, 0.6)",
+              }}
+            >
+              {/* Background celebration shapes */}
+              <div className="absolute top-4 left-6 w-8 h-8 rounded-full border border-white/20 opacity-40 pointer-events-none" />
+              <div className="absolute top-12 right-6 w-5 h-5 rotate-45 border-2 border-white/20 opacity-30 pointer-events-none" />
+              <div className="absolute bottom-16 left-8 w-3 h-3 rounded-full bg-white/30 pointer-events-none" />
+              <div className="absolute bottom-20 right-10 w-4 h-4 rotate-12 border border-white/25 pointer-events-none" />
+
+              {/* Title */}
+              <h3 className="font-display text-3xl font-extrabold tracking-tight mb-6">
+                {successModal.title}
+              </h3>
+
+              {/* Big 3D Checkmark Badge matching frame 0:15 in video */}
+              <div className="relative mx-auto w-32 h-32 flex items-center justify-center mb-6">
+                <div className="absolute inset-0 bg-white/10 rounded-3xl rotate-6 blur-sm" />
+                <div className="absolute inset-0 bg-white/15 rounded-3xl -rotate-3" />
+                <div className="relative w-28 h-28 bg-white rounded-3xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition">
+                  <Check className="w-16 h-16 text-[#2546e8] stroke-[3.5]" />
+                </div>
+              </div>
+
+              {/* Message & Email */}
+              <div className="space-y-1 mb-8">
+                <p className="text-sm text-white/85 font-medium leading-relaxed">
+                  {successModal.description}
+                </p>
+                {successModal.email && (
+                  <p className="text-sm font-bold text-white tracking-wide break-all">
+                    {successModal.email}
+                  </p>
+                )}
+              </div>
+
+              {/* Proceed Button matching video */}
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                type="button"
+                onClick={successModal.onProceed}
+                className="w-full py-4 rounded-2xl bg-[#0b102b] hover:bg-[#070b1f] text-white font-extrabold text-sm tracking-wider uppercase transition shadow-xl cursor-pointer"
+              >
+                {successModal.actionLabel || "PROCEED"}
+              </motion.button>
             </motion.div>
           </div>
         )}

@@ -1,0 +1,15 @@
+{
+  "version": "2.2.0",
+  "build": 220,
+  "releaseDate": "2026-10-24",
+  "appName": "Flick",
+  "updateSource": "https://itzflick.vercel.app",
+  "changelog": [
+    "Offline auth resilience: staying signed in on app exit",
+    "In-app hot updates: update directly without reinstalling 102MB installer",
+    "Clean Notification Center: removed debug style switches",
+    "Big in-app push message banner with quick inline replies",
+    "Multi-tenant workspace isolation & 3D tilt cards",
+    "Fluid video-inspired morphing checkmark & success auth card"
+  ]
+}

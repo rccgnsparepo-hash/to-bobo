@@ -93,3 +93,14 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
+// Support direct notification triggers from main app thread (even when tab is minimized or backgrounded)
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+  if (event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, options } = event.data;
+    event.waitUntil(
+      self.registration.showNotification(title || 'Flick ⚡️', options || {})
+    );
+  }
+});

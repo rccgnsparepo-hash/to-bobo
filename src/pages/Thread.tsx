@@ -56,13 +56,10 @@ import {
   generateSyntheticVoiceNoteBlob,
   type MicErrorInfo,
 } from "@/lib/audioRecorder";
-import {
-  triggerNotchNotification,
-  type NotchStyle,
-  getStoredNotchStyle,
-} from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 import { useOnlinePresence, recordUserActivity } from "@/lib/presence";
 import { sendDmBroadcast } from "@/lib/dmBroadcast";
+import { triggerUndoToast } from "@/components/ui/InteractiveMorphToast";
 
 type Msg = {
   id: string;
@@ -577,6 +574,16 @@ export default function ThreadPage() {
       });
 
       window.dispatchEvent(new CustomEvent("flick:dm-unread-updated"));
+
+      triggerUndoToast({
+        message: "Message sent",
+        onUndo: async () => {
+          if (data?.id) {
+            await supabase.from("messages").delete().eq("id", data.id);
+            setMsgs((prev) => prev.filter((m) => m.id !== data.id));
+          }
+        },
+      });
     } finally {
       setTimeout(() => {
         isSendingQuickReplyRef.current = false;

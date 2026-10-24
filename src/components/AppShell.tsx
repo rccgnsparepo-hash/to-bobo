@@ -15,14 +15,18 @@ import {
   X,
   Type,
   WifiOff,
+  Building2,
+  ChevronDown,
+  Layers,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenantContext";
+import { WorkspaceSwitcherModal } from "./workspace/WorkspaceSwitcherModal";
 import { Avatar } from "./Avatar";
 import { AnimatePresence, motion } from "framer-motion";
 import { CoachMark } from "./CoachMark";
 import { ScrollHint } from "./ScrollHint";
 import { NotificationsInbox } from "./NotificationsInbox";
-import { NotchNotification } from "./notifications/NotchNotification";
 import { GlobalAudioOverlay } from "./GlobalAudioOverlay";
 import { initOfflineEngine } from "@/lib/offlineManager";
 import { useHomeCameraSwipe } from "@/hooks/useHomeCameraSwipe";
@@ -54,6 +58,8 @@ export function AppShell() {
   useLenis(viewportRef);
   const navigate = useNavigate();
   const { profile, signOut, user } = useAuth();
+  const { currentTenant } = useTenant();
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [unreadDMs, setUnreadDMs] = useState(0);
@@ -82,22 +88,28 @@ export function AppShell() {
 
   useEffect(() => {
     if (!user) return;
-    // OneSignal Web Push (installed PWA + browser). Silently binds external_id.
-    void initWebPush().then(async (ready) => {
-      await linkWebPushUser(user.id);
-      // Soft auto-prompt once per user: ask for push permission shortly after sign-in.
-      if (!ready) return;
-      const key = `flick:push-asked:${user.id}`;
-      if (localStorage.getItem(key)) return;
-      if (typeof Notification !== "undefined" && Notification.permission !== "default") return;
-      window.setTimeout(async () => {
-        localStorage.setItem(key, "1");
-        const { requestWebPushPermission } = await import("@/lib/webPush");
-        const granted = await requestWebPushPermission();
-        if (granted) await linkWebPushUser(user.id);
-      }, 6000);
+    // Proactive standard browser push notification permission prompt
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      const askKey = `flick:push-prompted:${user.id}`;
+      if (!localStorage.getItem(askKey)) {
+        window.setTimeout(async () => {
+          localStorage.setItem(askKey, "1");
+          await requestDesktopNotificationPermission();
+        }, 3500);
+      }
+    }
+
+    // Initialize full realtime notification engine (DMs, notch, chimes, OS background pushes)
+    const cleanupRealtimePush = initRealtimePushEngine({
+      userId: user.id,
+      navigate,
+      getCurrentPath: () => window.location.pathname,
     });
-    // Capacitor native OneSignal and Android Push Notifications
+
+    // Native & OneSignal push binding
+    void initWebPush().then(async (ready) => {
+      if (ready) await linkWebPushUser(user.id);
+    });
     void initOneSignal().then(() => loginPushUser(user.id));
     void setupNativeAndroidPush(user.id);
 
@@ -193,6 +205,7 @@ export function AppShell() {
 
     return () => {
       stopNews();
+      cleanupRealtimePush();
       clearInterval(dmInterval);
       window.removeEventListener("flick:notifications-updated", loadNotifs);
       window.removeEventListener("flick:dm-unread-updated", onDmUnreadEvent);
@@ -244,13 +257,45 @@ export function AppShell() {
     <div className="app-shell h-[100dvh] overflow-hidden flex relative bg-background">
       {/* Persistent desktop sidebar — compact ≥1024px, full ≥1280px. Never scrolls with content. */}
       <aside className="hidden lg:flex w-[88px] xl:w-[260px] shrink-0 flex-col border-r border-border p-3 xl:p-6 h-full overflow-y-auto bg-background z-30">
-        <Link
-          to="/"
-          className="font-display text-2xl xl:text-3xl mb-8 tracking-tight text-center xl:text-left"
+        <div className="flex items-center justify-between mb-4">
+          <Link
+            to="/"
+            className="font-display text-2xl xl:text-3xl tracking-tight text-center xl:text-left"
+          >
+            f<span className="hidden xl:inline">lick</span>
+            <span className="text-snap">.</span>
+          </Link>
+        </div>
+
+        {/* Multitenant Workspace Selector Pill */}
+        <button
+          type="button"
+          onClick={() => setWorkspaceModalOpen(true)}
+          className="mb-6 w-full flex items-center justify-between gap-2 p-2 rounded-2xl bg-secondary/80 hover:bg-secondary border border-border transition text-left group"
+          title="Switch Workspace / Tenant"
         >
-          f<span className="hidden xl:inline">lick</span>
-          <span className="text-snap">.</span>
-        </Link>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border shadow-inner"
+              style={{
+                borderColor: `${currentTenant.accent_color}50`,
+                backgroundColor: `${currentTenant.accent_color}25`,
+                color: currentTenant.accent_color,
+              }}
+            >
+              {currentTenant.name.charAt(0)}
+            </div>
+            <div className="hidden xl:block min-w-0 flex-1">
+              <div className="text-xs font-bold text-foreground truncate leading-tight">
+                {currentTenant.name}
+              </div>
+              <div className="text-[10px] text-muted-foreground truncate font-mono">
+                #{currentTenant.slug}
+              </div>
+            </div>
+          </div>
+          <ChevronDown className="hidden xl:block w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition shrink-0" />
+        </button>
         <nav className="flex flex-col gap-1">
           {tabs.map((t) => {
             const active = pathname === t.to || (t.to !== "/" && pathname.startsWith(t.to));
@@ -338,9 +383,24 @@ export function AppShell() {
         {/* Mobile/tablet top bar — bell & font studio */}
         {chrome && (
           <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 bg-background/85 backdrop-blur border-b border-border">
-            <Link to="/" className="font-display text-xl tracking-tight">
-              flick<span className="text-snap">.</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link to="/" className="font-display text-xl tracking-tight">
+                flick<span className="text-snap">.</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setWorkspaceModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary/80 border border-border/80 text-xs font-semibold text-foreground/90 max-w-[140px]"
+                title="Switch Workspace"
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: currentTenant.accent_color }}
+                />
+                <span className="truncate text-[11px] font-bold">{currentTenant.name}</span>
+                <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setInboxOpen(true)}
@@ -527,6 +587,21 @@ export function AppShell() {
               <button
                 onClick={() => {
                   setMoreOpen(false);
+                  setWorkspaceModalOpen(true);
+                }}
+                className="w-full text-left flex items-center gap-3 p-3 rounded-2xl hover:bg-secondary/60"
+              >
+                <span className="w-10 h-10 rounded-full bg-secondary grid place-items-center relative">
+                  <Building2 className="w-5 h-5 text-snap" />
+                </span>
+                <div>
+                  <div className="font-semibold">Workspaces & Tenants</div>
+                  <div className="text-xs text-muted-foreground">{currentTenant.name}</div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
                   setInboxOpen(true);
                 }}
                 className="w-full text-left flex items-center gap-3 p-3 rounded-2xl hover:bg-secondary/60"
@@ -549,7 +624,10 @@ export function AppShell() {
       <CoachMark />
       {!fullBleed && <ScrollHint />}
       <NotificationsInbox open={inboxOpen} onClose={() => setInboxOpen(false)} />
-      <NotchNotification />
+      <WorkspaceSwitcherModal
+        isOpen={workspaceModalOpen}
+        onClose={() => setWorkspaceModalOpen(false)}
+      />
       <GlobalAudioOverlay />
     </div>
   );

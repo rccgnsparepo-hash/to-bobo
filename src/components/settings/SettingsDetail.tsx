@@ -41,6 +41,7 @@ import { useNavigate } from "react-router-dom";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 import { notificationAudio } from "@/lib/notificationAudio";
 import { MediaStoragePanel } from "./MediaStoragePanel";
+import { AppUpdatesPanel } from "./AppUpdatesPanel";
 
 export type SettingsPanel =
   | "saved"
@@ -56,6 +57,7 @@ export type SettingsPanel =
   | "hideStory"
   | "messages"
   | "mediaStorage"
+  | "updates"
   | "tools";
 
 const TITLES: Record<SettingsPanel, string> = {
@@ -72,6 +74,7 @@ const TITLES: Record<SettingsPanel, string> = {
   hideStory: "Hide Story From",
   messages: "Messages & Story Replies",
   mediaStorage: "Media & Storage",
+  updates: "App Updates & Hot Reload",
   tools: "Account Tools",
 };
 
@@ -999,6 +1002,9 @@ export function SettingsDetail({
 
             {/* ===== 10. MEDIA & STORAGE ===== */}
             {panel === "mediaStorage" && <MediaStoragePanel />}
+
+            {/* ===== 11. IN-APP UPDATES & HOT RELOAD ===== */}
+            {panel === "updates" && <AppUpdatesPanel />}
           </div>
         </motion.div>
       </motion.div>

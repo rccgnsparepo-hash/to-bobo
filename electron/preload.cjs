@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
       callback(url);
     });
   },
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  applyHotUpdate: () => ipcRenderer.invoke("apply-hot-update"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
 });
 
 // Forward navigate-to events directly to window custom event for React Router

@@ -130,6 +130,7 @@ export function SystemLifeCycle() {
           body: messageSnippet,
           icon: msg.senderAvatar || "/icon-192.png",
           tag: `dm-${msg.senderId}-${msg.id}`,
+          url: chatUrl,
           onClick: () => {
             window.focus();
             window.location.href = chatUrl;

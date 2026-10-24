@@ -6,6 +6,7 @@ import { Newspaper, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { fetchNews, readerPath, type NewsItem } from "@/lib/news";
 import { useAppPrefs } from "@/lib/appPrefs";
+import { notificationAudio } from "@/lib/notificationAudio";
 
 const SEEN_KEY = "flick:news-seen";
 
@@ -83,6 +84,7 @@ export function NewsPopup() {
       }
 
       setItem(next);
+      void notificationAudio.playNewsWirePushSound(0.85);
       if (hideTimer.current) window.clearTimeout(hideTimer.current);
       hideTimer.current = window.setTimeout(() => setItem(null), 7000);
     }, every);

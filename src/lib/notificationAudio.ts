@@ -88,6 +88,8 @@ class NotificationAudioEngine {
         return `${callerName} posted a story`;
       case "post":
         return `${callerName} just flicked`;
+      case "news":
+        return `Flick News Wire: ${callerName}`;
       default:
         return `New notification from ${callerName}`;
     }
@@ -198,7 +200,10 @@ class NotificationAudioEngine {
     const soundKey = kind === "message" ? "chat" : kind;
     const targetFile = customSoundUrl || SOUND_FILE_MAP[soundKey] || SOUND_FILE_MAP.general;
 
-    const filePlayed = await this.playCustomAudioFile(targetFile);
+    let filePlayed = await this.playCustomAudioFile(targetFile);
+    if (!filePlayed && targetFile !== SOUND_FILE_MAP.general) {
+      filePlayed = await this.playCustomAudioFile(SOUND_FILE_MAP.general);
+    }
 
     // If no custom audio file exists yet, fallback to built-in snappy sound effect
     if (!filePlayed) {
@@ -241,6 +246,20 @@ class NotificationAudioEngine {
       // Allow chime to resonate
       await new Promise((r) => setTimeout(r, 1400));
     }
+  }
+
+  /**
+   * Dedicated sound effect for Flick News Wire pushes.
+   * Plays the custom news-wire-push audio file (/sounds/news-wire-push.wav).
+   */
+  public async playNewsWirePushSound(volume = 0.95): Promise<boolean> {
+    if (typeof window === "undefined") return false;
+    const played = await this.playCustomAudioFile(SOUND_FILE_MAP.news, volume);
+    if (!played) {
+      playSound("notification_chime");
+      return false;
+    }
+    return true;
   }
 }
 

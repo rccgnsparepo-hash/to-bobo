@@ -112,10 +112,13 @@ export function startNewsNotificationChannel(): () => void {
       const arr = Array.from(delivered).slice(-60); // keep last 60
       localStorage.setItem(NEWS_DELIVERED_KEY, JSON.stringify(arr));
 
-      // Trigger in-app notification banner
+      // Trigger news wire push notification sound & in-app banner
       const { triggerNotchNotification } = await import("@/components/notifications/NotchNotification");
+      const { notificationAudio } = await import("@/lib/notificationAudio");
+      void notificationAudio.playNewsWirePushSound(0.95);
+
       triggerNotchNotification({
-        kind: "system",
+        kind: "news",
         title: "📰 Flick News Wire",
         message: fresh.title,
         url: readerPath(fresh),
@@ -173,3 +176,24 @@ export function startNewsNotificationChannel(): () => void {
     clearInterval(intervalId);
   };
 }
+
+/**
+ * Manually fires a News Wire Push Notification (with notification sound and notch banner)
+ * for testing or instant alerts.
+ */
+export async function triggerTestNewsPush(headline?: string): Promise<void> {
+  const title = headline || "Global Tech & Science Wire: Fresh Breakthroughs Released";
+  const { triggerNotchNotification } = await import("@/components/notifications/NotchNotification");
+  const { notificationAudio } = await import("@/lib/notificationAudio");
+
+  void notificationAudio.playNewsWirePushSound(1.0);
+
+  triggerNotchNotification({
+    kind: "news",
+    title: "📰 Flick News Wire",
+    message: title,
+    url: "/news",
+    actor: { id: "news", handle: "news", display_name: "News Wire" },
+  });
+}
+

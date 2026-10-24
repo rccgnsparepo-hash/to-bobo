@@ -26,6 +26,11 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 
 import { SystemLifeCycle } from "@/components/SystemLifeCycle";
 
+import { Auth3DToastProvider } from "@/components/ui/Auth3DToast";
+import { TenantProvider } from "@/lib/tenantContext";
+import { NotchNotification } from "@/components/notifications/NotchNotification";
+import { InteractiveMorphToast } from "@/components/ui/InteractiveMorphToast";
+
 const queryClient = new QueryClient();
 
 function IntroGate() {
@@ -60,40 +65,46 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <IntroGate />
-          <ScrollToTop />
-          <SystemLifeCycle />
-          <Routes>
-            <Route path="/intro" element={<IntroPage />} />
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/.lovable/oauth/consent" element={<OAuthConsentPage />} />
-            <Route
-              element={
-                <Protected>
-                  <AppShell />
-                </Protected>
-              }
-            >
-              <Route path="/" element={<HomePage />} />
-              <Route path="/camera" element={<CameraPage />} />
-              <Route path="/stories/new" element={<StoryComposerPage />} />
-              <Route path="/messages" element={<MessagesPage />}>
-                <Route path=":userId" element={<ThreadPage />} />
-              </Route>
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/verification" element={<VerificationPage />} />
-              <Route path="/creator-insights" element={<CreatorInsightsPage />} />
-              <Route path="/insights" element={<Navigate to="/creator-insights" replace />} />
-              <Route path="/challenges" element={<ChallengesPage />} />
-              <Route path="/news" element={<NewsPage />} />
-              <Route path="/news/read" element={<NewsReaderPage />} />
-              <Route path="/u/:handle" element={<UserProfilePage />} />
-              <Route path="/comics" element={<ComicsPage />} />
-              <Route path="/comics/:id" element={<ComicReaderPage />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <Toaster theme="dark" />
+          <Auth3DToastProvider>
+            <TenantProvider>
+              <IntroGate />
+              <ScrollToTop />
+              <SystemLifeCycle />
+              <NotchNotification />
+              <InteractiveMorphToast />
+              <Routes>
+                <Route path="/intro" element={<IntroPage />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/.lovable/oauth/consent" element={<OAuthConsentPage />} />
+                <Route
+                  element={
+                    <Protected>
+                      <AppShell />
+                    </Protected>
+                  }
+                >
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/camera" element={<CameraPage />} />
+                  <Route path="/stories/new" element={<StoryComposerPage />} />
+                  <Route path="/messages" element={<MessagesPage />}>
+                    <Route path=":userId" element={<ThreadPage />} />
+                  </Route>
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/verification" element={<VerificationPage />} />
+                  <Route path="/creator-insights" element={<CreatorInsightsPage />} />
+                  <Route path="/insights" element={<Navigate to="/creator-insights" replace />} />
+                  <Route path="/challenges" element={<ChallengesPage />} />
+                  <Route path="/news" element={<NewsPage />} />
+                  <Route path="/news/read" element={<NewsReaderPage />} />
+                  <Route path="/u/:handle" element={<UserProfilePage />} />
+                  <Route path="/comics" element={<ComicsPage />} />
+                  <Route path="/comics/:id" element={<ComicReaderPage />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              <Toaster theme="dark" />
+            </TenantProvider>
+          </Auth3DToastProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
