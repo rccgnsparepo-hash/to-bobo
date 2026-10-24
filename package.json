@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Flick - Modern social platform combining timeline feed with disappearing stories and chats",
   "author": "Flick faratechinc@gmail.com",
-  "homepage": "https://faratech-flick.vercel.app",
   "private": true,
   "sideEffects": false,
   "type": "module",

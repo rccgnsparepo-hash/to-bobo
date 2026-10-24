@@ -9,7 +9,7 @@ export type AppUpdateInfo = {
 };
 
 const CURRENT_VERSION = "2.2.0";
-const UPDATE_ENDPOINT = "https://itzflick.vercel.app/version.json";
+const UPDATE_ENDPOINT = "/version.json";
 const LAST_CHECK_KEY = "flick:last_update_check";
 
 export async function checkForAppUpdates(): Promise<AppUpdateInfo> {
@@ -25,19 +25,19 @@ export async function checkForAppUpdates(): Promise<AppUpdateInfo> {
           latestVersion: res.latestVersion || CURRENT_VERSION,
           hasUpdate: Boolean(res.hasUpdate),
           changelog: res.changelog || [],
-          source: res.source || "https://itzflick.vercel.app",
+          source: res.source || "Cloud Release Network",
           checkedAt: Date.now(),
         };
       }
     } catch {}
   }
 
-  // 2. Fetch from live endpoint (itzflick.vercel.app or local version.json)
+  // 2. Fetch from live endpoint (version.json)
   try {
     const res = await fetch(UPDATE_ENDPOINT, {
       cache: "no-store",
       headers: { Pragma: "no-cache", "Cache-Control": "no-cache" },
-    }).catch(() => fetch("/version.json", { cache: "no-store" }));
+    });
 
     if (res && res.ok) {
       const data = await res.json();
@@ -49,7 +49,7 @@ export async function checkForAppUpdates(): Promise<AppUpdateInfo> {
         hasUpdate,
         releaseDate: data.releaseDate,
         changelog: data.changelog || [],
-        source: data.updateSource || "https://itzflick.vercel.app",
+        source: data.updateSource || "Cloud Release Network",
         checkedAt: Date.now(),
       };
       localStorage.setItem(LAST_CHECK_KEY, JSON.stringify(info));
@@ -63,7 +63,7 @@ export async function checkForAppUpdates(): Promise<AppUpdateInfo> {
     currentVersion: CURRENT_VERSION,
     latestVersion: CURRENT_VERSION,
     hasUpdate: false,
-    source: "https://itzflick.vercel.app",
+    source: "Cloud Release Network",
     checkedAt: Date.now(),
   };
 }

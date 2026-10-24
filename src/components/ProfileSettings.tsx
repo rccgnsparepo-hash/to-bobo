@@ -23,6 +23,7 @@ import {
   Shield,
   HardDrive,
   RefreshCw,
+  Film,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { usePremium } from "@/lib/premium";
@@ -52,7 +53,8 @@ export function ProfileSettings({ open, onClose }: { open: boolean; onClose: () 
     {
       title: "How you use Flick",
       items: [
-        { icon: RefreshCw, label: "App Updates & Hot Reload", sub: "Auto-update from itzflick.vercel.app", onClick: () => setPanel("updates") },
+        { icon: RefreshCw, label: "App Updates & Hot Reload", sub: "Instant over-the-air updates & reload", onClick: () => setPanel("updates") },
+        { icon: Film, label: "Replay Intro Animation", sub: "Watch the cinematic launch intro", onClick: () => { onClose(); navigate("/intro"); } },
         { icon: Bookmark, label: "Saved", sub: "View collection", onClick: () => setPanel("saved") },
         { icon: Archive, label: "Archive", sub: String(prefs.archivedPosts?.length ?? 0), onClick: () => setPanel("archive") },
         { icon: Activity, label: "Your activity", onClick: () => setPanel("activity") },

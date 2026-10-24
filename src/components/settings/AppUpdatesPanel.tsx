@@ -22,12 +22,12 @@ export function AppUpdatesPanel() {
     currentVersion: "2.2.0",
     latestVersion: "2.2.0",
     hasUpdate: false,
-    source: "https://itzflick.vercel.app",
+    source: "Cloud Release Network",
     checkedAt: Date.now(),
     changelog: [
-      "In-App Hot Updates: Stream direct delta updates without downloading 102MB installers",
+      "In-App Hot Updates: Stream direct delta updates without downloading bulky installers",
       "Offline Auth Resilience: Never signed out on exit, tab close, or offline restarts",
-      "Clean Notification Center: Streamlined preferences with no debug pills or simulators",
+      "Clean Notification Center: Streamlined preferences with zero clutter",
       "Large floating in-app push banners for instant incoming direct messages",
     ],
   });
@@ -69,7 +69,7 @@ export function AppUpdatesPanel() {
   const handleApplyUpdate = async () => {
     setApplying(true);
     fireSparkleConfetti();
-    toast.info("Hot-updating Flick to latest version from itzflick.vercel.app…");
+    toast.info("Updating Flick to latest version…");
 
     try {
       const success = await applyInAppUpdate();
@@ -128,7 +128,7 @@ export function AppUpdatesPanel() {
               ) : (
                 <>
                   <Globe className="w-3.5 h-3.5 text-primary" />
-                  Web / PWA &bull; Connected to itzflick.vercel.app
+                  Web / PWA &bull; Cloud Synchronized
                 </>
               )}
             </p>
@@ -157,7 +157,7 @@ export function AppUpdatesPanel() {
                     New Version v{updateInfo.latestVersion} Available
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    Instant hot-reload stream &bull; 0MB download installer
+                    Instant hot-reload stream &bull; 0MB installer download
                   </div>
                 </div>
               </div>
@@ -175,19 +175,16 @@ export function AppUpdatesPanel() {
         )}
       </div>
 
-      {/* No 102MB installer explanation */}
+      {/* No installer explanation */}
       <div className="p-4 rounded-2xl border border-border/70 bg-card/40 space-y-3">
         <div className="flex items-center gap-2.5 text-xs font-bold text-foreground">
           <Zap className="w-4 h-4 text-amber-400" />
-          <span>Zero 102MB Reinstall Overhead</span>
+          <span>Zero Reinstall Overhead</span>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Instead of downloading and installing a full 102MB executable every time you update Flick,
-          the app dynamically pulls the newest release straight from{" "}
-          <span className="text-foreground font-medium underline decoration-primary/40">
-            itzflick.vercel.app
-          </span>
-          . All your local offline messages, credentials, and settings remain untouched.
+          Instead of downloading and installing heavy executable packages every time you update Flick,
+          the app dynamically applies the newest release over the air. All your local offline messages,
+          credentials, and settings remain untouched.
         </p>
       </div>
 
@@ -201,7 +198,7 @@ export function AppUpdatesPanel() {
           <div className="space-y-0.5">
             <div className="text-sm font-semibold">Automatic Update Checks</div>
             <div className="text-xs text-muted-foreground">
-              Search for new releases from itzflick.vercel.app on launch
+              Search for new releases automatically on launch
             </div>
           </div>
           <input
