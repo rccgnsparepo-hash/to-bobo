@@ -26,7 +26,7 @@ import { Reactions } from "./Reactions";
 import { ShareSheet } from "./ShareSheet";
 import { VoiceMessage } from "./VoiceMessage";
 import { PostActions } from "./PostActions";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { notify } from "@/lib/notify";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 import { toast } from "sonner";
@@ -60,6 +60,7 @@ type Comment = {
 };
 
 export function PostCard({ post }: { post: PostRow }) {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [likeCount, setLikeCount] = useState(0);
   const [liked, setLiked] = useState(false);
@@ -372,7 +373,8 @@ export function PostCard({ post }: { post: PostRow }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 260, damping: 26 }}
         whileHover={{ y: -2 }}
-        className="px-4 py-3 border-b border-border hover:bg-secondary/20 transition flex gap-3"
+        onClick={() => navigate(`/post/${post.id}`)}
+        className="px-4 py-3 border-b border-border hover:bg-secondary/20 transition flex gap-3 cursor-pointer"
       >
         <Link
           to={post.author?.handle ? `/u/${post.author.handle}` : "#"}
@@ -410,7 +412,10 @@ export function PostCard({ post }: { post: PostRow }) {
               </button>
             )}
             <button
-              onClick={() => setActionsOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActionsOpen(true);
+              }}
               className={`${isAuthor ? "ml-1" : "ml-auto"} p-1 text-muted-foreground hover:text-foreground`}
               aria-label="More"
             >
@@ -498,40 +503,56 @@ export function PostCard({ post }: { post: PostRow }) {
           )}
           <div className="flex items-center gap-6 mt-3 text-muted-foreground text-sm flex-wrap">
             <button
-              onClick={() => {
-                if (showComments) setShowComments(false);
-                else openComments();
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/post/${post.id}`);
               }}
               className="flex items-center gap-1.5 hover:text-primary transition"
+              title="View full post and replies"
             >
               <MessageCircle className="w-4 h-4" /> {commentCount > 0 && commentCount}
             </button>
             <button
-              onClick={toggleReshare}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleReshare();
+              }}
               className={`flex items-center gap-1.5 transition ${reshared ? "text-emerald-400" : "hover:text-emerald-400"}`}
             >
               <Repeat2 className="w-4 h-4" /> {reshareCount > 0 && reshareCount}
             </button>
             <button
-              onClick={toggleLike}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleLike();
+              }}
               className={`flex items-center gap-1.5 transition ${liked ? "text-rose-500" : "hover:text-rose-500"}`}
             >
               <Heart className={`w-4 h-4 ${liked ? "fill-current" : ""}`} />{" "}
               {likeCount > 0 && likeCount}
             </button>
-            <Reactions postId={post.id} authorId={post.author?.id} postContent={post.content} />
+            <div onClick={(e) => e.stopPropagation()}>
+              <Reactions postId={post.id} authorId={post.author?.id} postContent={post.content} />
+            </div>
 
-            {/* Flick Views Counter */}
+            {/* Flick Genuine Views Counter */}
             <div
-              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition cursor-default select-none ml-1"
-              title={`${viewCount} views on this flick`}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/post/${post.id}`);
+              }}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition cursor-pointer select-none ml-1"
+              title={`${viewCount} views on this flick (tap to view full analytics)`}
             >
               <Eye className="w-4 h-4 text-muted-foreground/80" />
               <span className="text-xs font-semibold">{formatFlickViews(viewCount)}</span>
             </div>
 
             <button
-              onClick={() => setShareOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShareOpen(true);
+              }}
               className="flex items-center gap-1.5 hover:text-snap transition ml-auto"
             >
               <Share2 className="w-4 h-4" />

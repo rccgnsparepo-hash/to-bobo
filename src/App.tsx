@@ -24,6 +24,7 @@ import NewsReaderPage from "@/pages/NewsReader";
 import UserProfilePage from "@/pages/UserProfile";
 import VerificationPage from "@/pages/Verification";
 import CreatorInsightsPage from "@/pages/CreatorInsights";
+import PostDetailPage from "@/pages/PostDetail";
 import { ScrollToTop } from "@/components/ScrollToTop";
 
 import { SystemLifeCycle } from "@/components/SystemLifeCycle";
@@ -198,6 +199,22 @@ function AnimatedRoutes() {
             element={
               <PageTransition>
                 <ComicReaderPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/post/:id"
+            element={
+              <PageTransition>
+                <PostDetailPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/flick/:id"
+            element={
+              <PageTransition>
+                <PostDetailPage />
               </PageTransition>
             }
           />

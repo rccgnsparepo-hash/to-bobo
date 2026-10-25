@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { type RealtimeChannel } from "@supabase/supabase-js";
 import { useOnlinePresence } from "@/lib/presence";
 import { sendDmBroadcast, type DuelResponsePayload } from "@/lib/dmBroadcast";
+import { notify } from "@/lib/notify";
 import { useNavigate } from "react-router-dom";
 
 interface DuelModalProps {
@@ -200,31 +201,50 @@ export function DuelModal({
   const initiateChallenge = () => {
     if (!opponent || !user) return;
 
-    // 1. Check if opponent is online
-    const isOnline = isUserOnline(opponent.id);
-    if (!isOnline) {
-      setGameState("opponent_offline");
-      return;
-    }
-
-    // 2. Set state to inviting and broadcast duel invite
+    // Set state to inviting and trigger haptics
     setGameState("inviting");
-    setInviteSecondsLeft(20);
+    setInviteSecondsLeft(25);
     triggerLightHaptic();
 
+    const challengerName = profile?.display_name || profile?.handle || "Challenger";
+    const challengerHandle = profile?.handle || "user";
+
+    // 1. Peer-to-peer real-time broadcast on opponent's personal channel
     void sendDmBroadcast(opponent.id, "duel-invite", {
       challengerId: user.id,
-      challengerName: profile?.display_name || "Challenger",
-      challengerHandle: profile?.handle || "user",
+      challengerName,
+      challengerHandle,
       challengerAvatar: profile?.avatar_url,
       duelId: roomId,
       timestamp: new Date().toISOString(),
     });
 
-    toast.info(`Sent live challenge to @${opponent.handle}. Waiting for answer...`);
+    // 2. Authoritative push notification so opponent sees it on Home, News, Me or minimized
+    void notify({
+      kind: "message",
+      title: "⚔️ Live Duel Challenge!",
+      message: `${challengerName} (@${challengerHandle}) has challenged you to a live duel!`,
+      actor: {
+        id: user.id,
+        display_name: challengerName,
+        handle: challengerHandle,
+      },
+      recipients: [opponent.id],
+      data: {
+        type: "duel-invite",
+        duelId: roomId,
+        challengerId: user.id,
+        challengerName,
+        challengerHandle,
+        challengerAvatar: profile?.avatar_url,
+      },
+      url: `/challenges?duel=${roomId}&challenger=${user.id}`,
+    });
 
-    // 20-second timeout
-    let remaining = 20;
+    toast.info(`Sent live challenge to @${opponent.handle}! Waiting for response…`);
+
+    // 25-second timeout waiting for response
+    let remaining = 25;
     inviteTimerRef.current = setInterval(() => {
       remaining -= 1;
       setInviteSecondsLeft(remaining);

@@ -17,6 +17,8 @@ import {
 import { MicPermissionModal } from "@/components/chat/MicPermissionModal";
 import { detectSocialUrl, resolveSocialEmbed, type SocialEmbed } from "@/lib/socialEmbeds";
 import { SocialEmbedCard } from "@/components/social/SocialEmbedCard";
+import { AutocorrectBar } from "@/components/common/AutocorrectBar";
+import { applyInlineAutocorrect } from "@/lib/autocorrect";
 
 export function Composer({ onPosted }: { onPosted: () => void }) {
   const { user, profile } = useAuth();
@@ -38,10 +40,17 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
   const vidRef = useRef<HTMLInputElement>(null);
   const audRef = useRef<HTMLInputElement>(null);
 
-  const checkTextForEmbed = async (val: string) => {
-    setText(val);
+  const checkTextForEmbed = async (val: string, skipAutocorrect = false) => {
+    let finalVal = val;
+    if (!skipAutocorrect && val.endsWith(" ") && !text.endsWith(" ")) {
+      const res = applyInlineAutocorrect(val);
+      if (res.corrected) {
+        finalVal = res.newText;
+      }
+    }
+    setText(finalVal);
     if (embed) return;
-    const detected = detectSocialUrl(val);
+    const detected = detectSocialUrl(finalVal);
     if (detected) {
       setResolvingEmbed(true);
       try {
@@ -258,6 +267,13 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
           onChange={(e) => checkTextForEmbed(e.target.value.slice(0, 500))}
           placeholder="What's flickering? (Paste Instagram, X, or TikTok links to auto-embed)"
           className="w-full bg-transparent text-xl placeholder:text-muted-foreground resize-none focus:outline-none min-h-[60px]"
+        />
+
+        {/* Live Auto-Correct & Spelling Suggestions Bar */}
+        <AutocorrectBar
+          currentText={text}
+          onApplyCorrection={(updated) => checkTextForEmbed(updated.slice(0, 500), true)}
+          className="rounded-xl my-1"
         />
 
         {resolvingEmbed && (

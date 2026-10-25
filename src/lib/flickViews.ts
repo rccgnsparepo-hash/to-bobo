@@ -1,48 +1,29 @@
-// Global Flick View Counter & Tracking Module
+// Genuine Flick View Counter & Tracking Module (Strictly Realtime & Organic)
 
-const STORAGE_PREFIX = "flick:post_views:";
+const STORAGE_PREFIX = "flick:genuine_views:";
+const LEGACY_STORAGE_PREFIX = "flick:post_views:";
 const sessionViewed = new Set<string>();
 
-/**
- * Deterministic pseudo-random hash generator based on postId string
- * ensures consistent natural baseline views even on first load without flickering.
- */
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-/**
- * Calculate organic baseline views from post creation time and like count
- */
-function getBaselineViews(postId: string, createdAt?: string, likeCount: number = 0): number {
-  const seed = hashString(postId);
-  const multiplier = 5 + (seed % 12); // between 5x and 16x like count
-  const baseLikesBonus = Math.max(likeCount * multiplier, 0);
-
-  let timeBonus = 6 + (seed % 14); // base 6-19 views
-  if (createdAt) {
-    const hoursOld = Math.max(0, (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60));
-    if (hoursOld > 24) {
-      timeBonus += 45 + (seed % 65);
-    } else if (hoursOld > 6) {
-      timeBonus += 20 + (seed % 30);
-    } else if (hoursOld > 1) {
-      timeBonus += 8 + (seed % 15);
+// One-time cleanup of legacy synthetic views from previous versions
+try {
+  if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(LEGACY_STORAGE_PREFIX)) {
+        keysToRemove.push(key);
+      }
     }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
   }
-
-  return baseLikesBonus + timeBonus;
-}
+} catch {}
 
 /**
- * Get current persistent view count for a flick
+ * Returns strictly real persistent view count for a flick.
+ * Newly posted flicks start at 0 views.
  */
-export function getFlickViews(postId: string, createdAt?: string, likeCount: number = 0): number {
+export function getFlickViews(postId: string, _createdAt?: string, _likeCount: number = 0): number {
+  if (!postId) return 0;
   try {
     const stored = localStorage.getItem(`${STORAGE_PREFIX}${postId}`);
     if (stored !== null) {
@@ -53,17 +34,16 @@ export function getFlickViews(postId: string, createdAt?: string, likeCount: num
     }
   } catch {}
 
-  const initial = getBaselineViews(postId, createdAt, likeCount);
-  try {
-    localStorage.setItem(`${STORAGE_PREFIX}${postId}`, initial.toString());
-  } catch {}
-  return initial;
+  // Brand new posts start strictly at 0 real views
+  return 0;
 }
 
 /**
- * Increment view count for a flick once per session when rendered or viewed
+ * Increment view count for a flick strictly once per session when rendered or viewed.
+ * No synthetic bonuses, 100% genuine user count.
  */
 export function recordFlickView(postId: string, createdAt?: string, likeCount: number = 0): number {
+  if (!postId) return 0;
   const current = getFlickViews(postId, createdAt, likeCount);
 
   if (sessionViewed.has(postId)) {

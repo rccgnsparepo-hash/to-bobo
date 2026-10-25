@@ -309,9 +309,12 @@ export function initRealtimePushEngine({
       isAppVisible &&
       (currentPath === `/messages/${senderId}` || currentPath.startsWith(`/messages/${senderId}/`));
 
-    // If active in foreground thread, the thread UI already displays it
+    // Always broadcast new incoming message so active DM threads update in realtime without needing manual tap or reload
+    window.dispatchEvent(new CustomEvent("flick:new-message-received", { detail: msg }));
+    window.dispatchEvent(new CustomEvent("flick:dm-unread-updated", { detail: { increment: 1, senderId } }));
+
+    // If active in foreground thread, skip notch banner since the thread displays it live
     if (isLookingAtThisThread) {
-      window.dispatchEvent(new CustomEvent("flick:dm-unread-updated", { detail: { increment: 1 } }));
       return;
     }
 

@@ -63,6 +63,8 @@ import { useOnlinePresence, recordUserActivity } from "@/lib/presence";
 import { sendDmBroadcast } from "@/lib/dmBroadcast";
 import { triggerUndoToast } from "@/components/ui/InteractiveMorphToast";
 import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
+import { AutocorrectBar } from "@/components/common/AutocorrectBar";
+import { applyInlineAutocorrect } from "@/lib/autocorrect";
 
 type Msg = {
   id: string;
@@ -195,7 +197,15 @@ export default function ThreadPage() {
     });
   };
 
-  const load = async () => {
+  const scrollToBottom = (instant = false) => {
+    requestAnimationFrame(() => {
+      if (endRef.current) {
+        endRef.current.scrollIntoView({ behavior: instant ? "auto" : "smooth" });
+      }
+    });
+  };
+
+  const load = async (shouldScroll = true) => {
     if (!user || !userId) return;
     const now = new Date().toISOString();
     const { data } = await supabase
@@ -207,6 +217,10 @@ export default function ThreadPage() {
       .or(`expires_at.is.null,expires_at.gt.${now}`)
       .order("created_at", { ascending: true });
     setMsgs((data ?? []) as Msg[]);
+    if (shouldScroll) {
+      setTimeout(() => scrollToBottom(true), 30);
+      setTimeout(() => scrollToBottom(false), 120);
+    }
     // mark inbound as read
     setMsgs((rows) =>
       rows.map((m) =>
@@ -266,7 +280,7 @@ export default function ThreadPage() {
         .eq("blocked_id", userId)
         .maybeSingle()
         .then(({ data }) => setBlocked(!!data));
-    load();
+    load(true);
     const ch = supabase
       .channel(`dm-${[user?.id, userId].sort().join("-")}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
@@ -275,9 +289,35 @@ export default function ThreadPage() {
         const relevant =
           (row.sender_id === user.id && row.recipient_id === userId) ||
           (row.sender_id === userId && row.recipient_id === user.id);
-        if (relevant) load();
+        if (relevant) {
+          load(true);
+        }
       })
       .subscribe();
+
+    // Event listener for in-app broadcast of incoming messages & unread updates
+    const onNewIncomingMessage = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const sId = detail?.sender_id || detail?.senderId;
+      const rId = detail?.recipient_id || detail?.recipientId;
+      if (!detail || (sId === userId && rId === user?.id) || (sId === user?.id && rId === userId)) {
+        load(true);
+      }
+    };
+
+    const onDmUnread = () => {
+      load(false);
+    };
+
+    window.addEventListener("flick:new-message-received", onNewIncomingMessage);
+    window.addEventListener("flick:dm-unread-updated", onDmUnread);
+
+    // Fast sync poller (2.5s) while actively looking at this conversation
+    const livePoll = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        load(false);
+      }
+    }, 2500);
 
     // Typing presence
     if (user && typingRoomId) {
@@ -317,6 +357,9 @@ export default function ThreadPage() {
       supabase.removeChannel(ch);
       if (typingChannelRef.current) supabase.removeChannel(typingChannelRef.current);
       if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+      window.removeEventListener("flick:new-message-received", onNewIncomingMessage);
+      window.removeEventListener("flick:dm-unread-updated", onDmUnread);
+      clearInterval(livePoll);
       clearInterval(cull);
     };
   }, [userId, user?.id, typingRoomId]);
@@ -594,11 +637,18 @@ export default function ThreadPage() {
     }
   };
 
-  const onType = (v: string) => {
-    setText(v);
-    textRef.current = v;
+  const onType = (v: string, skipAutocorrect = false) => {
+    let finalVal = v;
+    if (!skipAutocorrect && v.endsWith(" ") && !text.endsWith(" ")) {
+      const res = applyInlineAutocorrect(v);
+      if (res.corrected) {
+        finalVal = res.newText;
+      }
+    }
+    setText(finalVal);
+    textRef.current = finalVal;
     if (userId) {
-      saveChatTextDraft(userId, v);
+      saveChatTextDraft(userId, finalVal);
     }
     if (!user || !userId) return;
 
@@ -1840,6 +1890,12 @@ export default function ThreadPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Live Auto-Correct & Spelling Suggestions Bar */}
+      <AutocorrectBar
+        currentText={text}
+        onApplyCorrection={(updated) => onType(updated, true)}
+      />
 
       {/* Bottom Floating Composer Rebrand */}
       <form

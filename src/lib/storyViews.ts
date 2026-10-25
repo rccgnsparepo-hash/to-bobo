@@ -29,68 +29,9 @@ function getStorageKey(storyId: string) {
   return `${STORAGE_KEY_PREFIX}${storyId}`;
 }
 
-// Organic active community members who follow & view stories
-const COMMUNITY_VIEWERS: Omit<StoryViewerUser, "viewed_at">[] = [
-  {
-    id: "flicker-ryder-88",
-    handle: "ryder",
-    display_name: "Ryder Vance",
-    avatar_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    reaction: "🔥",
-  },
-  {
-    id: "flicker-elena-02",
-    handle: "elena",
-    display_name: "Elena Rostova",
-    avatar_url: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
-    reaction: "❤️",
-  },
-  {
-    id: "flicker-marcus-94",
-    handle: "marcus_k",
-    display_name: "Marcus Kane",
-    avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    reaction: "👏",
-  },
-  {
-    id: "flicker-maya-77",
-    handle: "mayacodes",
-    display_name: "Maya Lin",
-    avatar_url: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-    reaction: null,
-  },
-  {
-    id: "flicker-kai-43",
-    handle: "kai_zen",
-    display_name: "Kai Tanaka",
-    avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-    reaction: "⚡",
-  },
-  {
-    id: "flicker-chloe-19",
-    handle: "chloedawn",
-    display_name: "Chloe Dawn",
-    avatar_url: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80",
-    reaction: "😍",
-  },
-  {
-    id: "flicker-tariq-22",
-    handle: "tariq_lens",
-    display_name: "Tariq Al-Mansoor",
-    avatar_url: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80",
-    reaction: null,
-  },
-  {
-    id: "flicker-amara-55",
-    handle: "amara_flow",
-    display_name: "Amara Diallo",
-    avatar_url: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80",
-    reaction: "🙌",
-  },
-];
-
 /**
  * Filter out invalid entries and ensure author is never counted as a viewer on their own story.
+ * Strictly excludes any mock data so only 100% real user accounts appear.
  */
 export function sanitizeViewers(
   viewers: StoryViewerUser[],
@@ -102,6 +43,17 @@ export function sanitizeViewers(
   return viewers.filter((v) => {
     if (!v || !v.id) return false;
     if (authorId && v.id === authorId) return false; // author CANNOT be counted as a viewer
+    // Filter out any legacy mock/fake profile IDs
+    if (
+      v.id.startsWith("flicker-") ||
+      v.handle === "ryder" ||
+      v.handle === "elena" ||
+      v.handle === "marcus_k" ||
+      v.handle === "mayacodes" ||
+      v.handle === "kai_zen"
+    ) {
+      return false;
+    }
     if (seen.has(v.id)) return false;
     seen.add(v.id);
     return true;
@@ -109,53 +61,13 @@ export function sanitizeViewers(
 }
 
 /**
- * Seed community views based on story creation time so stories from yesterday or earlier
- * accurately reflect community views and engagement.
- */
-function seedCommunityViews(
-  storyId: string,
-  authorId?: string,
-  storyCreatedAt?: string
-): StoryViewerUser[] {
-  if (!storyCreatedAt) return [];
-  const createdAtMs = new Date(storyCreatedAt).getTime();
-  if (isNaN(createdAtMs) || createdAtMs <= 0) return [];
-
-  const ageHours = (Date.now() - createdAtMs) / (1000 * 60 * 60);
-  if (ageHours < 0.05) {
-    // Brand new story (< 3 minutes) - start at 0 until viewed
-    return [];
-  }
-
-  // Determine how many community members saw it based on age
-  let countToSeed = 2;
-  if (ageHours >= 20) {
-    countToSeed = 7; // Posted yesterday
-  } else if (ageHours >= 6) {
-    countToSeed = 5;
-  } else if (ageHours >= 1) {
-    countToSeed = 3;
-  }
-
-  const eligible = COMMUNITY_VIEWERS.filter((c) => !authorId || c.id !== authorId);
-  return eligible.slice(0, countToSeed).map((c, i) => {
-    // Generate view time after story was posted
-    const viewDelayMs = (i + 1) * 18 * 60 * 1000 + (i * 35000);
-    const viewedAt = new Date(createdAtMs + viewDelayMs).toISOString();
-    return {
-      ...c,
-      viewed_at: viewedAt,
-    };
-  });
-}
-
-/**
  * Fetch real story views from local cache and sanitize against authorId.
+ * Never inserts mock or placeholder viewers.
  */
 export function getStoryViews(
   storyId: string,
   authorId?: string,
-  storyCreatedAt?: string
+  _storyCreatedAt?: string
 ): StoryViewsData {
   let localViewers: StoryViewerUser[] = [];
   try {
@@ -168,27 +80,6 @@ export function getStoryViews(
     }
   } catch (err) {
     console.error("Error reading cached story views:", err);
-  }
-
-  // If local viewers is empty but the story was posted earlier, seed community views
-  if (localViewers.length === 0 && storyCreatedAt) {
-    const seeded = seedCommunityViews(storyId, authorId, storyCreatedAt);
-    if (seeded.length > 0) {
-      localViewers = seeded;
-      const reactions: Record<string, number> = {};
-      localViewers.forEach((v) => {
-        if (v.reaction) reactions[v.reaction] = (reactions[v.reaction] || 0) + 1;
-      });
-      const initialData: StoryViewsData = {
-        totalCount: localViewers.length,
-        viewers: localViewers,
-        reactions,
-      };
-      try {
-        localStorage.setItem(getStorageKey(storyId), JSON.stringify(initialData));
-      } catch {}
-      return initialData;
-    }
   }
 
   const reactions: Record<string, number> = {};
