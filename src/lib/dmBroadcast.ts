@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { recordUserActivity } from "@/lib/presence";
 
-const activeSendChannels = new Map<string, ReturnType<typeof supabase.channel>>();
+type RealtimeChannel = ReturnType<typeof supabase.channel>;
+const activeSendChannels = new Map<string, RealtimeChannel>();
 
 export type DmBroadcastEvent =
   | "new-message"
@@ -29,7 +30,7 @@ export interface DuelResponsePayload {
 
 /**
  * Sends a real-time broadcast to a user's personal channel (instant notification / typing / live duels).
- * Caches channel connections so broadcasts are delivered with 0ms overhead and no memory leak.
+ * Caches channel connections and automatically reconnects if channel state dropped.
  */
 export async function sendDmBroadcast(
   recipientId: string,
@@ -42,29 +43,45 @@ export async function sendDmBroadcast(
     recordUserActivity(senderId);
   }
 
-  // Consistent unified channel per recipient for all realtime peer signals
   const channelName = `dm-events-${recipientId}`;
   let ch = activeSendChannels.get(channelName);
 
-  if (!ch) {
-    ch = supabase.channel(channelName);
+  // If channel is missing or closed/errored, rebuild and subscribe
+  // @ts-expect-error Supabase channel state string
+  const isJoined = ch && (ch.state === "joined" || ch.state === "joining");
+
+  if (!ch || !isJoined) {
+    if (ch) {
+      try {
+        void supabase.removeChannel(ch);
+      } catch {}
+      activeSendChannels.delete(channelName);
+    }
+
+    ch = supabase.channel(channelName, {
+      config: {
+        broadcast: { ack: false, self: false },
+      },
+    });
     activeSendChannels.set(channelName, ch);
 
     await new Promise<void>((resolve) => {
       let resolved = false;
-      ch!.subscribe((status) => {
-        if (status === "SUBSCRIBED" && !resolved) {
-          resolved = true;
-          resolve();
-        }
-      });
-      // Fallback timeout after 350ms so UI is never blocked
-      setTimeout(() => {
+      const done = () => {
         if (!resolved) {
           resolved = true;
           resolve();
         }
-      }, 350);
+      };
+
+      ch!.subscribe((status) => {
+        if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          done();
+        }
+      });
+
+      // Quick timeout fallback so sending UI is never delayed
+      setTimeout(done, 400);
     });
   }
 
@@ -75,6 +92,6 @@ export async function sendDmBroadcast(
       payload,
     });
   } catch (err) {
-    console.warn(`[dmBroadcast] Failed to send ${event} to ${recipientId}:`, err);
+    console.warn(`[dmBroadcast] Broadcast send error for ${event} to ${recipientId}:`, err);
   }
 }

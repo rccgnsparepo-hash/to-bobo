@@ -1,8 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 import { notificationAudio } from "@/lib/notificationAudio";
-import { triggerLightHaptic } from "@/lib/haptics";
 import { soundEngine } from "@/lib/soundEngine";
+import { triggerLightHaptic } from "@/lib/haptics";
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 
 export interface RealtimeNotificationsOptions {
@@ -88,10 +88,11 @@ function ensureServiceWorkerRegistration() {
 /**
  * Send an OS-level desktop / mobile notification.
  * Works even when user is minimized, tab is hidden, or looking at another window.
- * Uses a 3-layer delivery strategy:
- * 1. Native Capacitor (Android APK)
- * 2. ServiceWorkerRegistration.showNotification (standard for Chrome, Android PWA, Edge, Firefox)
- * 3. Window Notification constructor (fallback for legacy desktop)
+ * 4-layer delivery strategy:
+ * 1. Native Electron IPC Toast Notification + Taskbar Flash (Instant desktop support)
+ * 2. Native Capacitor (Android APK)
+ * 3. ServiceWorkerRegistration.showNotification (standard for Chrome, Android PWA, Edge, Firefox)
+ * 4. Window Notification constructor (fallback for legacy desktop)
  */
 export async function sendDesktopNotification({
   title,
@@ -112,7 +113,26 @@ export async function sendDesktopNotification({
   const iconUrl = icon || "/icon-192.png";
   const notifTag = tag || `flick-msg-${Date.now()}`;
 
-  // 1. Native Capacitor Android OS Notifications
+  // 1. Native Electron Desktop Toast & Flash Frame
+  if (typeof window !== "undefined") {
+    const electronBridge = (window as unknown as {
+      electronAPI?: {
+        showNotification?: (payload: { title: string; body: string; url?: string }) => void;
+        flashFrame?: () => void;
+      };
+    }).electronAPI;
+
+    if (electronBridge?.showNotification) {
+      electronBridge.showNotification({
+        title,
+        body,
+        url: targetUrl,
+      });
+      electronBridge.flashFrame?.();
+    }
+  }
+
+  // 2. Native Capacitor Android OS Notifications
   try {
     const { isNativePlatform } = await import("@/lib/native/platform");
     if (isNativePlatform()) {
@@ -138,7 +158,7 @@ export async function sendDesktopNotification({
     return;
   }
 
-  // 2. Service Worker Registration showNotification (Primary & most reliable for background / minimized)
+  // 3. Service Worker Registration showNotification (Primary & most reliable for background / minimized)
   let swHandled = false;
   if (typeof window !== "undefined" && "serviceWorker" in navigator) {
     try {
@@ -175,7 +195,7 @@ export async function sendDesktopNotification({
     }
   }
 
-  // 3. Fallback: window.Notification (desktop standard)
+  // 4. Fallback: window.Notification (desktop standard)
   if (!swHandled) {
     try {
       const notif = new Notification(title, {
@@ -351,7 +371,7 @@ export function initRealtimePushEngine({
       });
     }
 
-    // 3. Dynamic Island / Notch In-App Notification Banner (Visible on Home, News, Me, Explore, etc.)
+    // 3. Big Prominent In-App Push Notification Banner (Visible on Home, News, Me, Explore, etc.)
     triggerNotchNotification({
       kind: "message",
       title: senderName,
@@ -365,11 +385,14 @@ export function initRealtimePushEngine({
       url: threadUrl,
     });
 
-    // 4. OS Desktop / Mobile Push Notification (Fires when minimized, hidden, or tab inactive)
+    // 4. OS Desktop / Mobile Push Notification
+    // In Electron, always fire native toast so user receives it even if window is in background or on a second display.
+    // In browser, fire whenever document is minimized, hidden, or user is browsing another page.
+    const isElectron = typeof window !== "undefined" && Boolean((window as unknown as { electronAPI?: unknown }).electronAPI);
     const isMinimizedOrBackground =
       typeof document === "undefined" || document.hidden || !document.hasFocus();
 
-    if (isMinimizedOrBackground) {
+    if (isElectron || isMinimizedOrBackground || currentPath !== threadUrl) {
       void sendDesktopNotification({
         title: `${senderName} sent you a Flick ⚡️`,
         body: messagePreview,
@@ -391,7 +414,9 @@ export function initRealtimePushEngine({
    * Channel 1: Instant peer-to-peer broadcast for messages, typing indicators, and duel challenges
    */
   const broadcastChannel = supabase
-    .channel(`dm-events-${userId}`)
+    .channel(`dm-events-${userId}`, {
+      config: { broadcast: { self: false } },
+    })
     .on("broadcast", { event: "new-message" }, (evt) => {
       const payload = evt.payload as Record<string, unknown>;
       if (payload) {
@@ -432,6 +457,7 @@ export function initRealtimePushEngine({
 
   /**
    * Channel 2: Supabase Postgres database changes on messages table
+   * Listen without restrictive column filter to avoid Postgres replication filter dropouts
    */
   const dbMessagesChannel = supabase
     .channel(`realtime-messages-${userId}`)
@@ -441,11 +467,10 @@ export function initRealtimePushEngine({
         event: "INSERT",
         schema: "public",
         table: "messages",
-        filter: `recipient_id=eq.${userId}`,
       },
       (payload) => {
         const msg = payload.new as Record<string, unknown>;
-        if (msg) {
+        if (msg && msg.recipient_id === userId) {
           void handleInboundMessage(msg);
         }
       }
@@ -453,7 +478,7 @@ export function initRealtimePushEngine({
     .subscribe();
 
   /**
-   * Channel 3: Supabase Postgres database changes on notifications table (likes, comments, mentions, stories)
+   * Channel 3: Supabase Postgres database changes on notifications table (likes, comments, mentions, stories, and direct messages)
    */
   const dbNotifsChannel = supabase
     .channel(`realtime-inbox-${userId}`)
@@ -473,12 +498,11 @@ export function initRealtimePushEngine({
           title: string;
           body: string | null;
           url: string | null;
+          data?: Record<string, unknown>;
         };
 
         if (!n || !n.id || n.actor_id === userId) return;
         if (isDuplicate(`notif-${n.id}`)) return;
-        // Skip messages here as handleInboundMessage handles them with full rich context
-        if (n.kind === "message") return;
 
         // Fetch actor info
         let actorInfo: { id: string; display_name: string; handle: string; avatar_url: string | null } | undefined;
@@ -491,6 +515,23 @@ export function initRealtimePushEngine({
               .single();
             if (data) actorInfo = data;
           } catch {}
+        }
+
+        // Handle message notification with full rich context as reliable backup
+        if (n.kind === "message") {
+          const senderId = ((n.data as any)?.senderId || n.actor_id) as string | undefined;
+          if (senderId && senderId !== userId) {
+            void handleInboundMessage({
+              id: ((n.data as any)?.dedupe_id || (n.data as any)?.message_id || `notif-${n.id}`) as string,
+              sender_id: senderId,
+              recipient_id: userId,
+              content: n.body,
+              senderName: actorInfo?.display_name || n.title,
+              senderHandle: actorInfo?.handle,
+              senderAvatar: actorInfo?.avatar_url,
+            });
+          }
+          return;
         }
 
         const kind = (n.kind as any) || "system";
@@ -560,7 +601,53 @@ export function initRealtimePushEngine({
     })
     .subscribe();
 
+  /**
+   * Channel 5: Fail-Safe Inbound Poller
+   * Guarantees message delivery within 3.5 seconds even if WebSockets disconnected
+   * or device was sleeping/minimized.
+   */
+  const pollUnreadInbound = async () => {
+    try {
+      const now = new Date().toISOString();
+      const { data } = await supabase
+        .from("messages")
+        .select("id, sender_id, recipient_id, content, media_type, created_at")
+        .eq("recipient_id", userId)
+        .is("read_at", null)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (data && data.length > 0) {
+        for (const msg of data) {
+          const age = Date.now() - new Date(msg.created_at).getTime();
+          // Only push recent messages (under 120 seconds old) that haven't been pushed yet
+          if (age < 120000 && !processedIds.has(msg.id)) {
+            void handleInboundMessage(msg);
+          }
+        }
+      }
+    } catch {}
+  };
+
+  const pollInterval = window.setInterval(pollUnreadInbound, 3500);
+  const onVisibilityChange = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") {
+      void pollUnreadInbound();
+    }
+  };
+
+  window.addEventListener("focus", pollUnreadInbound);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("online", pollUnreadInbound);
+  window.addEventListener("flick:system-resume", pollUnreadInbound);
+
   return () => {
+    window.clearInterval(pollInterval);
+    window.removeEventListener("focus", pollUnreadInbound);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("online", pollUnreadInbound);
+    window.removeEventListener("flick:system-resume", pollUnreadInbound);
     supabase.removeChannel(broadcastChannel);
     supabase.removeChannel(dbMessagesChannel);
     supabase.removeChannel(dbNotifsChannel);

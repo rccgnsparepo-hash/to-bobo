@@ -1,3 +1,4 @@
+import { useState, useRef } from "react";
 import { ImagePlus, X, Mic, Video, Music, Link2, Sparkles, Loader2, Smile } from "lucide-react";
 import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
 import { supabase } from "@/integrations/supabase/client";

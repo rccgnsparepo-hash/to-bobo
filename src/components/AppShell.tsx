@@ -183,6 +183,7 @@ export function AppShell() {
     };
     window.addEventListener("flick:dm-unread-updated", onDmUnreadEvent);
     window.addEventListener("focus", loadDMs);
+    window.addEventListener("flick:system-resume", loadDMs);
 
     const dmInterval = setInterval(loadDMs, 3500);
 
@@ -199,8 +200,13 @@ export function AppShell() {
       .channel(`dm-count-${user.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages", filter: `recipient_id=eq.${user.id}` },
-        loadDMs,
+        { event: "*", schema: "public", table: "messages" },
+        (payload) => {
+          const row = (payload.new || payload.old) as { recipient_id?: string; sender_id?: string } | undefined;
+          if (row?.recipient_id === user.id || row?.sender_id === user.id) {
+            void loadDMs();
+          }
+        },
       )
       .subscribe();
 
@@ -211,6 +217,7 @@ export function AppShell() {
       window.removeEventListener("flick:notifications-updated", loadNotifs);
       window.removeEventListener("flick:dm-unread-updated", onDmUnreadEvent);
       window.removeEventListener("focus", loadDMs);
+      window.removeEventListener("flick:system-resume", loadDMs);
       supabase.removeChannel(notifCh);
       supabase.removeChannel(dmCh);
     };

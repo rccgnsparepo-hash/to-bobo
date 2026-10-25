@@ -693,6 +693,7 @@ export default function ThreadPage() {
       return;
     }
     setMsgs((rows) => rows.map((m) => (m.id === optimistic.id ? (data as Msg) : m)));
+    const senderTag = profile?.handle ? `@${profile.handle}` : profile?.display_name || user.id.slice(0, 8);
     const mediaTitle =
       detected === "audio"
         ? `${senderTag} sent a voice note`
@@ -700,7 +701,6 @@ export default function ThreadPage() {
           ? `${senderTag} sent a photo`
           : `${senderTag} sent a video`;
     const mediaDesc = detected === "audio" ? "🎙️ Voice message" : detected === "image" ? "📷 Photo" : "🎥 Video";
-    const senderTag = profile?.handle ? `@${profile.handle}` : profile?.display_name || user.id.slice(0, 8);
     notify({
       kind: "message",
       title: mediaTitle,
