@@ -38,11 +38,35 @@ export function recordUserActivity(userId: string | null | undefined) {
   broadcastPresenceUpdate();
 }
 
+const ONLINE_PRIVACY_KEY = "flick:privacy_show_online";
+
+export function isOnlinePrivacyEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const val = localStorage.getItem(ONLINE_PRIVACY_KEY);
+    return val !== "false";
+  } catch {
+    return true;
+  }
+}
+
+export function setOnlinePrivacyEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(ONLINE_PRIVACY_KEY, String(enabled));
+    broadcastPresenceUpdate();
+  } catch {}
+}
+
 /**
  * Checks whether a given user is currently online in realtime.
+ * WhatsApp-style: Validates internet connectivity + active app session.
  */
 export function checkIsOnline(uid: string | null | undefined): boolean {
   if (!uid) return false;
+  // If local browser has no internet connection, cannot be online
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return false;
+  }
   if (onlineUserIds.has(uid)) return true;
   const lastActive = recentActivityMap.get(uid);
   if (lastActive && Date.now() - lastActive < ACTIVE_THRESHOLD_MS) {

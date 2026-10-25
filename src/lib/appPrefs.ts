@@ -103,3 +103,33 @@ export function useAppPrefs() {
   };
   return { prefs, update };
 }
+
+/**
+ * Returns false if the user toggled off the specific notification category in Settings
+ */
+export function isNotificationCategoryEnabled(kind: string): boolean {
+  const p = readAppPrefs();
+  const normalized = (kind || "").toLowerCase();
+  switch (normalized) {
+    case "message":
+    case "chat":
+    case "dm":
+    case "typing":
+      return p.notificationsDMs;
+    case "like":
+    case "reaction":
+      return p.notificationsLikes;
+    case "flicker":
+    case "follow":
+      return p.notificationsFlickers;
+    case "comment":
+    case "reply":
+      return p.notificationsComments;
+    case "story":
+      return p.notificationsStories;
+    case "news":
+      return p.newsPopups;
+    default:
+      return true;
+  }
+}

@@ -2,6 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 import { notificationAudio } from "@/lib/notificationAudio";
 import { triggerLightHaptic } from "@/lib/haptics";
+import { soundEngine } from "@/lib/soundEngine";
+import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 
 export interface RealtimeNotificationsOptions {
   userId: string;
@@ -11,6 +13,7 @@ export interface RealtimeNotificationsOptions {
 
 /** Synthesize a pleasant notification chime */
 export function playNotificationChime() {
+  if (!soundEngine.isSoundEnabled()) return;
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
@@ -333,13 +336,20 @@ export function initRealtimePushEngine({
       triggerLightHaptic();
     } catch {}
 
+    // Check if DMs notification is enabled in user settings
+    if (!isNotificationCategoryEnabled("message")) {
+      return;
+    }
+
     // 2. Play notification sound chime and optional voice announcement
-    void notificationAudio.playNotificationAudio("message", {
-      id: senderId,
-      display_name: senderName,
-      handle: senderHandle,
-      avatar_url: senderAvatar,
-    });
+    if (soundEngine.isSoundEnabled() || notificationAudio.isVoiceEnabled()) {
+      void notificationAudio.playNotificationAudio("message", {
+        id: senderId,
+        display_name: senderName,
+        handle: senderHandle,
+        avatar_url: senderAvatar,
+      });
+    }
 
     // 3. Dynamic Island / Notch In-App Notification Banner (Visible on Home, News, Me, Explore, etc.)
     triggerNotchNotification({
@@ -378,7 +388,7 @@ export function initRealtimePushEngine({
   };
 
   /**
-   * Channel 1: Instant peer-to-peer broadcast from Thread sender
+   * Channel 1: Instant peer-to-peer broadcast for messages, typing indicators, and duel challenges
    */
   const broadcastChannel = supabase
     .channel(`dm-events-${userId}`)
@@ -386,6 +396,36 @@ export function initRealtimePushEngine({
       const payload = evt.payload as Record<string, unknown>;
       if (payload) {
         void handleInboundMessage(payload);
+      }
+    })
+    .on("broadcast", { event: "user-typing" }, (evt) => {
+      const payload = evt.payload as {
+        senderId?: string;
+        displayName?: string;
+        handle?: string;
+        avatarUrl?: string;
+        isTyping?: boolean;
+      };
+      if (payload?.senderId) {
+        window.dispatchEvent(
+          new CustomEvent("flick:dm-typing-update", { detail: payload })
+        );
+      }
+    })
+    .on("broadcast", { event: "duel-invite" }, (evt) => {
+      const payload = evt.payload as Record<string, unknown>;
+      if (payload) {
+        window.dispatchEvent(
+          new CustomEvent("flick:duel-invite-received", { detail: payload })
+        );
+      }
+    })
+    .on("broadcast", { event: "duel-response" }, (evt) => {
+      const payload = evt.payload as Record<string, unknown>;
+      if (payload) {
+        window.dispatchEvent(
+          new CustomEvent("flick:duel-response-received", { detail: payload })
+        );
       }
     })
     .subscribe();
@@ -458,6 +498,11 @@ export function initRealtimePushEngine({
         const message = n.body || "";
         const url = n.url || "/";
 
+        // Check if user turned off this notification category in Settings
+        if (!isNotificationCategoryEnabled(kind)) {
+          return;
+        }
+
         // In-app notch
         triggerNotchNotification({
           kind,
@@ -468,7 +513,9 @@ export function initRealtimePushEngine({
         });
 
         // Sound chime
-        void notificationAudio.playNotificationAudio(kind, actorInfo);
+        if (soundEngine.isSoundEnabled() || notificationAudio.isVoiceEnabled()) {
+          void notificationAudio.playNotificationAudio(kind, actorInfo);
+        }
 
         // Desktop OS notification if backgrounded
         if (typeof document !== "undefined" && (document.hidden || !document.hasFocus())) {

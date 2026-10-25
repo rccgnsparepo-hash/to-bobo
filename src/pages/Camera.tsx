@@ -376,6 +376,7 @@ export default function CameraPage() {
           </div>
         )}
       </footer>
+
     </div>
   );
 }

@@ -13,6 +13,8 @@ import {
   Trash2,
   Loader2,
   CornerDownRight,
+  Eye,
+  Smile,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +38,8 @@ import { TopFlickerBadge } from "@/components/TopFlickerBadge";
 import { getUserTopRank } from "@/lib/topFlickers";
 import { detectSocialUrl, resolveSocialEmbed, type SocialEmbed } from "@/lib/socialEmbeds";
 import { SocialEmbedCard } from "@/components/social/SocialEmbedCard";
+import { getFlickViews, recordFlickView, formatFlickViews } from "@/lib/flickViews";
+import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
 
 export type PostRow = {
   id: string;
@@ -75,6 +79,20 @@ export function PostCard({ post }: { post: PostRow }) {
   const [playing, setPlaying] = useState(true);
   const [socialEmbed, setSocialEmbed] = useState<SocialEmbed | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [viewCount, setViewCount] = useState(() => getFlickViews(post.id, post.created_at, likeCount));
+
+  useEffect(() => {
+    const v = recordFlickView(post.id, post.created_at, likeCount);
+    setViewCount(v);
+    const onViewsUpdate = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d?.postId === post.id) {
+        setViewCount(d.views);
+      }
+    };
+    window.addEventListener("flick:view-count-updated", onViewsUpdate);
+    return () => window.removeEventListener("flick:view-count-updated", onViewsUpdate);
+  }, [post.id, post.created_at, likeCount]);
 
   const authorTopRank = getUserTopRank(post.author?.id);
 
@@ -502,6 +520,16 @@ export function PostCard({ post }: { post: PostRow }) {
               {likeCount > 0 && likeCount}
             </button>
             <Reactions postId={post.id} authorId={post.author?.id} postContent={post.content} />
+
+            {/* Flick Views Counter */}
+            <div
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition cursor-default select-none ml-1"
+              title={`${viewCount} views on this flick`}
+            >
+              <Eye className="w-4 h-4 text-muted-foreground/80" />
+              <span className="text-xs font-semibold">{formatFlickViews(viewCount)}</span>
+            </div>
+
             <button
               onClick={() => setShareOpen(true)}
               className="flex items-center gap-1.5 hover:text-snap transition ml-auto"
@@ -656,6 +684,7 @@ function CommentSheet({
     }
   }, [comments.length]);
 
+  const [showFullEmoji, setShowFullEmoji] = useState(false);
   const QUICK_EMOJIS = ["😂", "🤣", "🔥", "❤️", "😍", "👏", "💀", "🙌", "💯"] as const;
 
   const handleAddEmoji = (emoji: string) => {
@@ -789,8 +818,8 @@ function CommentSheet({
           )}
         </div>
 
-        {/* Quick Reactions & Laugh Emojis Bar */}
-        <div className="px-4 py-2 bg-card/90 border-t border-border/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        {/* Quick Reactions & Laugh Emojis Bar with More Button */}
+        <div className="px-4 py-2 bg-card/90 border-t border-border/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar relative">
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1">
             React:
           </span>
@@ -805,7 +834,41 @@ function CommentSheet({
               {emoji}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setShowFullEmoji((v) => !v)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition ml-auto shrink-0 ${
+              showFullEmoji
+                ? "bg-snap text-snap-foreground"
+                : "bg-secondary text-foreground hover:bg-secondary/70 border border-border"
+            }`}
+            title="Browse all emojis"
+          >
+            <Smile className="w-3.5 h-3.5" />
+            <span>More</span>
+          </button>
         </div>
+
+        {/* Full Emoji Picker Popover */}
+        <AnimatePresence>
+          {showFullEmoji && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="p-2 border-t border-border bg-card flex justify-center"
+            >
+              <FullEmojiPicker
+                onSelectEmoji={(emoji) => {
+                  handleAddEmoji(emoji);
+                }}
+                onClose={() => setShowFullEmoji(false)}
+                height={280}
+                width="100%"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Comment Composer Form */}
         <form

@@ -292,7 +292,7 @@ export default function ProfilePage() {
           <div className="min-w-0">
             <h1 className="font-display text-lg font-bold truncate flex items-center gap-1.5 leading-tight">
               <span>{profile?.display_name || "Profile"}</span>
-              <FlickVerifiedBadge size={16} />
+              {isUserVerified(profile?.id) && <FlickVerifiedBadge size={16} />}
             </h1>
             <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
               {counts.flicks} {counts.flicks === 1 ? "flick" : "flicks"}
@@ -372,7 +372,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-2">
               <h2 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
                 <span>{profile?.display_name || "User"}</span>
-                <FlickVerifiedBadge size={22} />
+                {isUserVerified(profile?.id) && <FlickVerifiedBadge size={22} />}
               </h2>
             </div>
             <p className="text-sm text-muted-foreground mt-0.5 font-sans">

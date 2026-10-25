@@ -124,8 +124,8 @@ export function StoryViewer({
       seg.id,
       (fresh) => {
         const cleanViewers = currentAuthorId
-          ? fresh.viewers.filter((v) => v.id !== currentAuthorId && !v.id.startsWith("u-"))
-          : fresh.viewers.filter((v) => !v.id.startsWith("u-"));
+          ? fresh.viewers.filter((v) => v.id !== currentAuthorId)
+          : fresh.viewers;
         setViewsData({
           ...fresh,
           totalCount: cleanViewers.length,

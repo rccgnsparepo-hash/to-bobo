@@ -40,6 +40,8 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 import { notificationAudio } from "@/lib/notificationAudio";
+import { soundEngine, playSound } from "@/lib/soundEngine";
+import { isOnlinePrivacyEnabled, setOnlinePrivacyEnabled } from "@/lib/presence";
 import { MediaStoragePanel } from "./MediaStoragePanel";
 import { AppUpdatesPanel } from "./AppUpdatesPanel";
 
@@ -126,6 +128,8 @@ export function SettingsDetail({
   const [pinDraft, setPinDraft] = useState(prefs.screenTimePin || "1234");
   const [editingPin, setEditingPin] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(() => notificationAudio.isVoiceEnabled());
+  const [soundEffectEnabled, setSoundEffectEnabled] = useState(() => soundEngine.isSoundEnabled());
+  const [onlinePrivacy, setOnlinePrivacy] = useState(() => isOnlinePrivacyEnabled());
 
   const usage = useMemo(() => readUsage(), [panel]);
 
@@ -681,6 +685,43 @@ export function SettingsDetail({
                     Test Alert
                   </button>
                 </div>
+                <div className="rounded-2xl border border-border bg-card/60 p-4 mb-2 flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold flex items-center gap-2">
+                      <Volume2 className="w-4 h-4 text-snap" />
+                      <span>Notification Chime (&ldquo;Faaaaah&rdquo; Sound)</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      The signature &ldquo;faaaaah&rdquo; audio chime played when receiving chats, reactions, or duels. You can turn it on or off anytime.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playSound("notification_chime");
+                        toast("Playing &lsquo;Faaaaah&rsquo; sound effect");
+                      }}
+                      className="px-2.5 py-1 text-xs font-bold rounded-full bg-secondary text-foreground hover:bg-secondary/70 border border-border"
+                    >
+                      Test Sound
+                    </button>
+                    <input
+                      type="checkbox"
+                      checked={soundEffectEnabled}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setSoundEffectEnabled(val);
+                        soundEngine.setSoundEnabled(val);
+                        toast.success(
+                          val ? "Notification 'Faaaaah' sound turned ON" : "Notification 'Faaaaah' sound turned OFF"
+                        );
+                      }}
+                      className="w-5 h-5 accent-[hsl(var(--snap))] rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
+
                 <div className="rounded-2xl border border-border bg-card/60 p-4 mb-2 flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold flex items-center gap-2">
@@ -947,6 +988,32 @@ export function SettingsDetail({
                     />
                   </label>
                 ))}
+
+                {/* WhatsApp-style Online Presence Indicator Toggle */}
+                <label className="flex items-center gap-3 rounded-2xl border border-border bg-card/40 p-4 cursor-pointer hover:bg-card/60 transition">
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Show Online Status</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Show green &lsquo;Online&rsquo; indicator when you have active internet connection and are in the app (like WhatsApp double ticks and online badge).
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={onlinePrivacy}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setOnlinePrivacy(val);
+                      setOnlinePrivacyEnabled(val);
+                      toast.success(
+                        val ? "Online status visible to friends" : "Online status hidden (Always offline)"
+                      );
+                    }}
+                    className="w-5 h-5 accent-[hsl(var(--snap))]"
+                  />
+                </label>
               </div>
             )}
 

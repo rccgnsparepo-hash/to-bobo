@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import { triggerTestNewsPush } from "@/lib/news";
+import { TopFlickersBar } from "@/components/home/TopFlickersBar";
 
 type Item = { id: string; title: string; url: string; source: string; image: string | null; ts: number; summary: string };
 
@@ -161,6 +162,11 @@ export default function NewsPage() {
           <Search className="w-4 h-4 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search news…" className="bg-transparent flex-1 text-sm focus:outline-none" />
         </div>
+      </div>
+
+      {/* Global Top Flickers of the Week Showcase */}
+      <div className="mt-4">
+        <TopFlickersBar title="TOP FLICKERS OF THE WEEK • HALL OF FAME" />
       </div>
       <div className="flex gap-2 overflow-x-auto no-scrollbar px-5 py-4">
         {SOURCES.map((s) => (

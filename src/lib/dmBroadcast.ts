@@ -3,22 +3,47 @@ import { recordUserActivity } from "@/lib/presence";
 
 const activeSendChannels = new Map<string, ReturnType<typeof supabase.channel>>();
 
+export type DmBroadcastEvent =
+  | "new-message"
+  | "user-typing"
+  | "duel-invite"
+  | "duel-response"
+  | "duel-tap";
+
+export interface DuelInvitePayload {
+  challengerId: string;
+  challengerName: string;
+  challengerHandle: string;
+  challengerAvatar?: string | null;
+  duelId: string;
+  timestamp: string;
+}
+
+export interface DuelResponsePayload {
+  duelId: string;
+  challengerId: string;
+  opponentId: string;
+  accepted: boolean;
+  reason?: string;
+}
+
 /**
- * Sends a real-time broadcast to a user's personal channel (instant notification / typing delivery).
+ * Sends a real-time broadcast to a user's personal channel (instant notification / typing / live duels).
  * Caches channel connections so broadcasts are delivered with 0ms overhead and no memory leak.
  */
 export async function sendDmBroadcast(
   recipientId: string,
-  event: "new-message" | "user-typing",
+  event: DmBroadcastEvent,
   payload: Record<string, unknown>
 ): Promise<void> {
   if (!recipientId) return;
-  const senderId = (payload.sender_id || payload.senderId) as string | undefined;
+  const senderId = (payload.sender_id || payload.senderId || payload.challengerId || payload.opponentId) as string | undefined;
   if (senderId) {
     recordUserActivity(senderId);
   }
 
-  const channelName = event === "new-message" ? `dm-events-${recipientId}` : `dm-typing-${recipientId}`;
+  // Consistent unified channel per recipient for all realtime peer signals
+  const channelName = `dm-events-${recipientId}`;
   let ch = activeSendChannels.get(channelName);
 
   if (!ch) {

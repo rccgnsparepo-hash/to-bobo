@@ -5,7 +5,7 @@
  * and the app launch page can play the synchronized "Welcome to Flick" audio.
  */
 
-import { playSound } from "./soundEngine";
+import { playSound, soundEngine } from "./soundEngine";
 
 export type NotificationKind = "message" | "like" | "comment" | "story" | "post" | "mention" | "system" | "news";
 
@@ -196,23 +196,25 @@ class NotificationAudioEngine {
     const callerName = this.getCallerIdentifier(actor);
     const phrase = this.getAnnouncementPhrase(kind, callerName);
 
-    // 1. Play custom audio file if provided or configured
-    const soundKey = kind === "message" ? "chat" : kind;
-    const targetFile = customSoundUrl || SOUND_FILE_MAP[soundKey] || SOUND_FILE_MAP.general;
+    // 1. Play custom audio file or synthesized chime ONLY if sound effect is enabled
+    if (soundEngine.isSoundEnabled()) {
+      const soundKey = kind === "message" ? "chat" : kind;
+      const targetFile = customSoundUrl || SOUND_FILE_MAP[soundKey] || SOUND_FILE_MAP.general;
 
-    let filePlayed = await this.playCustomAudioFile(targetFile);
-    if (!filePlayed && targetFile !== SOUND_FILE_MAP.general) {
-      filePlayed = await this.playCustomAudioFile(SOUND_FILE_MAP.general);
-    }
+      let filePlayed = await this.playCustomAudioFile(targetFile);
+      if (!filePlayed && targetFile !== SOUND_FILE_MAP.general) {
+        filePlayed = await this.playCustomAudioFile(SOUND_FILE_MAP.general);
+      }
 
-    // If no custom audio file exists yet, fallback to built-in snappy sound effect
-    if (!filePlayed) {
-      if (kind === "message") {
-        playSound("message_received");
-      } else if (kind === "like") {
-        playSound("flick_reaction");
-      } else {
-        playSound("notification_chime");
+      // If no custom audio file exists yet, fallback to built-in snappy sound effect
+      if (!filePlayed) {
+        if (kind === "message") {
+          playSound("message_received");
+        } else if (kind === "like") {
+          playSound("flick_reaction");
+        } else {
+          playSound("notification_chime");
+        }
       }
     }
 
@@ -253,7 +255,7 @@ class NotificationAudioEngine {
    * Plays the custom news-wire-push audio file (/sounds/news-wire-push.wav).
    */
   public async playNewsWirePushSound(volume = 0.95): Promise<boolean> {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined" || !soundEngine.isSoundEnabled()) return false;
     const played = await this.playCustomAudioFile(SOUND_FILE_MAP.news, volume);
     if (!played) {
       playSound("notification_chime");

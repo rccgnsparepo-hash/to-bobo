@@ -30,6 +30,7 @@ const pageVariants = {
 
 export function PageTransition({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const isChat = pathname.startsWith("/messages");
 
   return (
     <motion.div
@@ -38,7 +39,7 @@ export function PageTransition({ children }: { children: ReactNode }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="min-h-full w-full flex-1 flex flex-col"
+      className={isChat ? "h-full min-h-0 w-full flex-1 flex flex-col overflow-hidden" : "min-h-full w-full flex-1 flex flex-col"}
     >
       {children}
     </motion.div>

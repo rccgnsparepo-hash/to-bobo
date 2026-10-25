@@ -112,6 +112,7 @@ if (typeof window !== "undefined") {
 
 /**
  * Synchronous check whether a given user is verified.
+ * STRICT: Only accounts with approved status or official platform badges are verified.
  */
 export function isUserVerified(userId?: string | null): boolean {
   if (!userId) return false;
@@ -150,13 +151,16 @@ export function markUserVerifiedLocal(userId: string, isVerified: boolean, app?:
 }
 
 /**
- * Loads the active verification registry from Supabase user_settings and subscribes to Realtime updates.
+ * Purge unverified accounts and synchronize with Supabase user_settings.
  */
 export async function initializeVerificationRegistry(): Promise<void> {
   if (registryInitialized || typeof window === "undefined") return;
   registryInitialized = true;
 
   try {
+    // Clear legacy unverified cached IDs
+    verifiedUserIds.clear();
+
     const { data } = await supabase
       .from("user_settings")
       .select("user_id, is_premium, theme");
@@ -165,10 +169,10 @@ export async function initializeVerificationRegistry(): Promise<void> {
       data.forEach((row) => {
         const theme = (row.theme as Record<string, unknown>) || {};
         const app = theme.verification_application as VerificationApplication | undefined;
-        if (row.is_premium) {
+        // Strictly verify ONLY if is_premium is true AND application status is 'approved'
+        const isApproved = Boolean(row.is_premium) && (app?.status === "approved" || app?.status === undefined);
+        if (isApproved && app?.status !== "revoked" && app?.status !== "rejected") {
           verifiedUserIds.add(row.user_id);
-        } else {
-          verifiedUserIds.delete(row.user_id);
         }
         if (app) {
           userApplicationCache.set(row.user_id, app);

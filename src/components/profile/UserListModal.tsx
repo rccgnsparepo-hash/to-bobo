@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Avatar } from "@/components/Avatar";
 import { FlickVerifiedBadge } from "@/components/FlickVerifiedBadge";
+import { isUserVerified } from "@/lib/verification";
 import {
   getFlickerUserIds,
   getFlickingUserIds,
@@ -294,7 +295,7 @@ export function UserListModal({
                           <span className="font-bold text-xs sm:text-sm text-foreground truncate hover:underline">
                             {u.display_name}
                           </span>
-                          <FlickVerifiedBadge size={14} />
+                          {isUserVerified(u.id) && <FlickVerifiedBadge size={14} />}
                         </div>
                         <div className="text-xs text-muted-foreground truncate">@{u.handle}</div>
                         {u.bio && (

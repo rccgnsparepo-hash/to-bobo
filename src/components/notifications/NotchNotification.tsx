@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { notificationAudio } from "@/lib/notificationAudio";
+import { soundEngine } from "@/lib/soundEngine";
+import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { supabase } from "@/integrations/supabase/client";
 
 export type NotchStyle = "big-card" | "expanded" | "glow" | "live" | "minimal";
@@ -58,8 +60,10 @@ export function setStoredNotchStyle(style: NotchStyle) {
   } catch {}
 }
 
-/** Synthesize a subtle, pleasant notification chime */
 function playNotificationChime() {
+  if (!soundEngine.isSoundEnabled()) {
+    return; // User disabled notification sound chime in Settings
+  }
   try {
     const AudioCtx =
       window.AudioContext ||
@@ -100,6 +104,11 @@ function playNotificationChime() {
 export function triggerNotchNotification(
   item: Omit<NotchNotificationItem, "id" | "timestamp"> & { id?: string }
 ) {
+  // STRICT USER SETTINGS CHECK: Drop notification if category was toggled off
+  if (!isNotificationCategoryEnabled(item.kind)) {
+    return;
+  }
+
   const fullItem: NotchNotificationItem = {
     id: item.id || `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     timestamp: Date.now(),
@@ -154,8 +163,12 @@ export function NotchNotification() {
       setReplySent(false);
       setProgress(100);
 
-      void notificationAudio.playNotificationAudio(item.kind, item.actor);
-      playNotificationChime();
+      if (notificationAudio.isVoiceEnabled()) {
+        void notificationAudio.playNotificationAudio(item.kind, item.actor);
+      }
+      if (soundEngine.isSoundEnabled()) {
+        playNotificationChime();
+      }
 
       try {
         if ("vibrate" in navigator) navigator.vibrate([35, 50, 35]);

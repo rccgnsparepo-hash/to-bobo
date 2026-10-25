@@ -72,11 +72,12 @@ export function AppShell() {
     return initOfflineEngine(setIsOnline);
   }, []);
 
-  // hide top bar & dock when inside an open chat thread
+  // hide top bar when inside chat thread or chat list, and hide dock when in open chat thread
   const inThread = /^\/messages\/[^/]+/.test(pathname);
-  const chrome = !inThread;
+  const isChatRoute = pathname.startsWith("/messages");
+  const chrome = !inThread && !isChatRoute;
   // Pages that manage their own viewport height (no extra main padding/max-width)
-  const fullBleed = inThread || pathname === "/messages";
+  const fullBleed = inThread || isChatRoute;
   // Wide desktops get a secondary contextual column on feed-style routes.
   const showRail = !fullBleed && ["/", "/news", "/challenges", "/comics"].includes(pathname);
 

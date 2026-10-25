@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 
 export type NotifyKind =
   | "post"
@@ -194,7 +195,7 @@ export async function notify(input: NotifyInput) {
       if (rows.length) await insertInboxRowsIfNeeded(rows);
     }
 
-    let shouldShowNotchLocally = true;
+    let shouldShowNotchLocally = isNotificationCategoryEnabled(input.kind);
     try {
       const { data: authData } = await supabase.auth.getUser();
       const currentUserId = authData?.user?.id ?? null;

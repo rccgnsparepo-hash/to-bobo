@@ -112,7 +112,12 @@ export function startNewsNotificationChannel(): () => void {
       const arr = Array.from(delivered).slice(-60); // keep last 60
       localStorage.setItem(NEWS_DELIVERED_KEY, JSON.stringify(arr));
 
-      // Trigger news wire push notification sound & in-app banner
+      // Trigger news wire push notification sound & in-app banner if enabled in preferences
+      const { readAppPrefs } = await import("@/lib/appPrefs");
+      if (!readAppPrefs().newsPopups) {
+        return;
+      }
+
       const { triggerNotchNotification } = await import("@/components/notifications/NotchNotification");
       const { notificationAudio } = await import("@/lib/notificationAudio");
       void notificationAudio.playNewsWirePushSound(0.95);

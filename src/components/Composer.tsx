@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ImagePlus, X, Mic, Video, Music, Link2, Sparkles, Loader2 } from "lucide-react";
+import { ImagePlus, X, Mic, Video, Music, Link2, Sparkles, Loader2, Smile } from "lucide-react";
+import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
   const [resolvingEmbed, setResolvingEmbed] = useState(false);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkInput, setLinkInput] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
@@ -379,6 +380,14 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
             >
               <Link2 className="w-5 h-5" />
             </button>
+            <button
+              type="button"
+              onClick={() => setShowEmoji(!showEmoji)}
+              className={`p-2 rounded-full hover:bg-secondary transition ${showEmoji ? "text-snap bg-snap/15" : "text-primary"}`}
+              title="Add emojis"
+            >
+              <Smile className="w-5 h-5" />
+            </button>
             <input
               ref={imgRef}
               type="file"
@@ -412,6 +421,20 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
             </button>
           </div>
         </div>
+
+        {/* Full WhatsApp Emoji Keyboard for Post Composer */}
+        {showEmoji && (
+          <div className="mt-3 flex justify-center border-t border-border pt-3">
+            <FullEmojiPicker
+              onSelectEmoji={(emoji) => {
+                setText((prev) => `${prev} ${emoji}`);
+              }}
+              onClose={() => setShowEmoji(false)}
+              height={320}
+              width="100%"
+            />
+          </div>
+        )}
       </div>
       <UploadProgress stages={stages} onDismiss={() => setStages([])} />
       <MicPermissionModal

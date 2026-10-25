@@ -28,6 +28,8 @@ import {
   Pause,
   Bookmark,
   Trash2,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -60,6 +62,7 @@ import { triggerNotchNotification } from "@/components/notifications/NotchNotifi
 import { useOnlinePresence, recordUserActivity } from "@/lib/presence";
 import { sendDmBroadcast } from "@/lib/dmBroadcast";
 import { triggerUndoToast } from "@/components/ui/InteractiveMorphToast";
+import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
 
 type Msg = {
   id: string;
@@ -1000,7 +1003,62 @@ export default function ThreadPage() {
       actor: other,
       url: `/messages/${other.id}`,
     });
-    toast.success("Triggered notification alert!");
+  };
+
+  const copyToClipboard = (val: string, label = "Text") => {
+    try {
+      navigator.clipboard.writeText(val);
+      toast.success(`${label} copied!`);
+      triggerLightHaptic();
+    } catch {
+      toast.error("Could not copy to clipboard");
+    }
+  };
+
+  const renderMessageContentWithLinks = (content: string, mine: boolean) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = content.split(urlRegex);
+
+    return (
+      <div className={`px-4 py-2 break-words text-[14px] font-normal leading-relaxed select-text cursor-text ${
+        mine ? "text-zinc-100" : "text-slate-900"
+      }`}>
+        {parts.map((part, i) => {
+          if (part.match(urlRegex)) {
+            return (
+              <span key={i} className="inline-flex items-center gap-1 my-0.5">
+                <a
+                  href={part}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`underline font-semibold hover:opacity-80 transition inline-flex items-center gap-0.5 ${
+                    mine ? "text-snap" : "text-blue-600"
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="truncate max-w-[200px]">{part}</span>
+                  <ExternalLink className="w-3 h-3 inline-block shrink-0" />
+                </a>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    copyToClipboard(part, "Link");
+                  }}
+                  className={`p-1 rounded hover:bg-black/15 transition ${
+                    mine ? "text-zinc-300 hover:text-white" : "text-slate-600 hover:text-black"
+                  }`}
+                  title="Copy URL"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              </span>
+            );
+          }
+          return <span key={i}>{part}</span>;
+        })}
+      </div>
+    );
   };
 
   return (
@@ -1265,12 +1323,6 @@ export default function ThreadPage() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ type: "spring", stiffness: 360, damping: 28 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.25}
-                onDragEnd={(_, info) => {
-                  if (Math.abs(info.offset.x) > 50) setReplyTo(m);
-                }}
                 className={`flex flex-col group ${mine ? "items-end" : "items-start"}`}
               >
                 {/* Replying quote badge if linked */}
@@ -1390,6 +1442,17 @@ export default function ThreadPage() {
                   {/* Left Action for Mine (Quick Reply & Quote Reply) */}
                   {mine && (
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                      {m.content && (
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(m.content || "", "Message")}
+                          className="p-1.5 text-muted-foreground hover:text-snap rounded-full transition"
+                          title="Copy text"
+                          aria-label="Copy text"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setQuickReplyMsgId((curr) => (curr === m.id ? null : m.id))}
@@ -1550,11 +1613,7 @@ export default function ThreadPage() {
 
                     {/* Text Content */}
                     {m.content && m.media_type !== "image" && m.media_type !== "video" && m.media_type !== "audio" && (
-                      <div className={`px-4 py-2 break-words text-[14px] font-normal leading-relaxed ${
-                        mine ? "text-zinc-100" : "text-slate-900"
-                      }`}>
-                        {m.content}
-                      </div>
+                      renderMessageContentWithLinks(m.content, mine)
                     )}
 
                     {/* Media Caption */}
@@ -1588,9 +1647,20 @@ export default function ThreadPage() {
                     </div>
                   </div>
 
-                  {/* Right Action for Peer (Quick Reply & Quote Reply) */}
+                  {/* Right Action for Peer (Quick Reply & Quote Reply & Copy) */}
                   {!mine && (
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                      {m.content && (
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(m.content || "", "Message")}
+                          className="p-1.5 text-muted-foreground hover:text-snap rounded-full transition"
+                          title="Copy text"
+                          aria-label="Copy text"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setQuickReplyMsgId((curr) => (curr === m.id ? null : m.id))}
@@ -1691,25 +1761,23 @@ export default function ThreadPage() {
         </div>
       )}
 
-      {/* Floating Popular Emoji Bar */}
+      {/* Full WhatsApp Emoji Keyboard Tray */}
       <AnimatePresence>
         {showEmojiPicker && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="bg-card/95 backdrop-blur-xl border-t border-border px-3 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-lg"
+            className="border-t border-border bg-[#121316] p-2 flex justify-center shadow-2xl relative z-30"
           >
-            {POPULAR_EMOJIS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setText((prev) => prev + e)}
-                className="text-xl p-1.5 hover:scale-125 transition shrink-0"
-              >
-                {e}
-              </button>
-            ))}
+            <FullEmojiPicker
+              onSelectEmoji={(e) => {
+                setText((prev) => prev + e);
+              }}
+              onClose={() => setShowEmojiPicker(false)}
+              height={320}
+              width="100%"
+            />
           </motion.div>
         )}
       </AnimatePresence>

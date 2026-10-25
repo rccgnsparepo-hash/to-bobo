@@ -32,6 +32,8 @@ import { Auth3DToastProvider } from "@/components/ui/Auth3DToast";
 import { TenantProvider } from "@/lib/tenantContext";
 import { NotchNotification } from "@/components/notifications/NotchNotification";
 import { InteractiveMorphToast } from "@/components/ui/InteractiveMorphToast";
+import { DuelChallengeReceiver } from "@/components/duel/DuelChallengeReceiver";
+import { NotificationSoundPrompt } from "@/components/notifications/NotificationSoundPrompt";
 
 const queryClient = new QueryClient();
 
@@ -225,6 +227,8 @@ export default function App() {
               <SystemLifeCycle />
               <NotchNotification />
               <InteractiveMorphToast />
+              <DuelChallengeReceiver />
+              <NotificationSoundPrompt />
               <AnimatedRoutes />
               <Toaster theme="dark" />
             </TenantProvider>

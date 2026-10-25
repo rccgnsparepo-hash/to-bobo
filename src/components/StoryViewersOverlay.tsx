@@ -56,15 +56,10 @@ export function StoryViewersOverlay({
 
   const storyTime = new Date(storyCreatedAt).getTime();
 
-  // Real viewers only — never include the author, seed IDs, or chronologically impossible timestamps
+  // Viewers list — never include the author
   const realViewers = (viewsData.viewers || []).filter((v) => {
     if (!v || !v.id) return false;
-    if (v.id.startsWith("u-")) return false; // remove decoy
     if (storyAuthorId && v.id === storyAuthorId) return false; // remove author
-    if (storyTime > 0 && v.viewed_at) {
-      const vTime = new Date(v.viewed_at).getTime();
-      if (vTime < storyTime - 10000) return false; // strictly discard old views from prior stories
-    }
     return true;
   });
 

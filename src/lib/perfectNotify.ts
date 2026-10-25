@@ -33,9 +33,16 @@ export type NotifyInput = {
  */
 const recentPerfectNotifications = new Map<string, number>();
 
+import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
+
 export async function perfectNotify(input: NotifyInput) {
   // STRICT RULE: Typing must NEVER create OS notifications or push alerts
   if (input.kind === "typing") {
+    return;
+  }
+
+  // Drop if notification category is disabled in user Settings
+  if (!isNotificationCategoryEnabled(input.kind)) {
     return;
   }
 
