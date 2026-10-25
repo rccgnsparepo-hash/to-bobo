@@ -202,6 +202,19 @@ export async function notify(input: NotifyInput) {
 
       if (currentUserId && actorId && actorId === currentUserId) shouldShowNotchLocally = false;
 
+      // Filter: If user is not following the actor, do not show notifications concerning that actor (unless system or direct DM)
+      if (currentUserId && actorId && actorId !== currentUserId) {
+        if (!["system", "message", "follow"].includes(input.kind)) {
+          try {
+            const raw = localStorage.getItem(`flick:flicking:${currentUserId}`);
+            const following = raw ? (JSON.parse(raw) as string[]) : [];
+            if (!following.includes(actorId)) {
+              shouldShowNotchLocally = false;
+            }
+          } catch {}
+        }
+      }
+
       if (input.kind === "message" && currentUserId) {
         try {
           const loc = typeof window !== "undefined" ? window.location.pathname : "";

@@ -32,6 +32,10 @@ import { downloadMedia } from "@/lib/downloadMedia";
 import { playSound } from "@/lib/soundEngine";
 import { FlickVerifiedBadge } from "@/components/FlickVerifiedBadge";
 import { isUserVerified } from "@/lib/verification";
+import { TopFlickerBadge } from "@/components/TopFlickerBadge";
+import { getUserTopRank } from "@/lib/topFlickers";
+import { detectSocialUrl, resolveSocialEmbed, type SocialEmbed } from "@/lib/socialEmbeds";
+import { SocialEmbedCard } from "@/components/social/SocialEmbedCard";
 
 export type PostRow = {
   id: string;
@@ -69,7 +73,20 @@ export function PostCard({ post }: { post: PostRow }) {
   const [deleted, setDeleted] = useState(false);
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(true);
+  const [socialEmbed, setSocialEmbed] = useState<SocialEmbed | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const authorTopRank = getUserTopRank(post.author?.id);
+
+  useEffect(() => {
+    if (!post.content) return;
+    const detected = detectSocialUrl(post.content);
+    if (detected) {
+      resolveSocialEmbed(detected.url).then((res) => {
+        if (res) setSocialEmbed(res);
+      });
+    }
+  }, [post.content]);
 
   const isAuthor = !!user && user.id === post.author?.id;
 
@@ -354,6 +371,7 @@ export function PostCard({ post }: { post: PostRow }) {
             >
               <span>{post.author?.display_name ?? "Unknown"}</span>
               {isUserVerified(post.author?.id) && <FlickVerifiedBadge size={14} />}
+              {authorTopRank && <TopFlickerBadge rank={authorTopRank} size="sm" />}
             </Link>
             <span className="text-muted-foreground truncate">@{post.author?.handle}</span>
             <span className="text-muted-foreground">·</span>
@@ -383,6 +401,11 @@ export function PostCard({ post }: { post: PostRow }) {
           </div>
           {post.content && (
             <p className="mt-1 whitespace-pre-wrap break-anywhere">{post.content}</p>
+          )}
+          {socialEmbed && (
+            <div className="mt-2.5">
+              <SocialEmbedCard embed={socialEmbed} />
+            </div>
           )}
           {mediaSrc && (
             <div className="mt-3 relative group">

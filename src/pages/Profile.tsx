@@ -33,6 +33,7 @@ import { isUserVerified } from "@/lib/verification";
 import { ProfileCover } from "@/components/profile/ProfileCover";
 import { AnimatePresence, motion } from "framer-motion";
 import { getFlickSocialStats, FOLLOWING_EVENT, FLICKERS_EVENT } from "@/lib/follow";
+import { UserListModal } from "@/components/profile/UserListModal";
 
 type Counts = {
   flicks: number;
@@ -67,6 +68,11 @@ export default function ProfilePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [savedPosts, setSavedPosts] = useState<PostRow[]>([]);
+  const [userListModal, setUserListModal] = useState<{
+    open: boolean;
+    type: "flickers" | "flicking" | "flicks";
+    title: string;
+  }>({ open: false, type: "flickers", title: "Flickers" });
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Editable fields in modal
@@ -391,26 +397,55 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Real Social Counts backed strictly by DB records */}
+          {/* Real Social Counts backed strictly by DB records - Tap to view list */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm pt-2">
-            <div>
-              <span className="font-bold font-display text-foreground text-base tabular-nums">
+            <button
+              onClick={() =>
+                setUserListModal({
+                  open: true,
+                  type: "flicking",
+                  title: `Flicking (${counts.flicking})`,
+                })
+              }
+              className="group text-left hover:opacity-80 transition cursor-pointer active:scale-95"
+            >
+              <span className="font-bold font-display text-foreground text-base tabular-nums group-hover:text-snap transition">
                 {counts.flicking.toLocaleString()}
               </span>{" "}
-              <span className="text-muted-foreground text-xs font-normal">Flicking</span>
-            </div>
-            <div>
-              <span className="font-bold font-display text-foreground text-base tabular-nums">
+              <span className="text-muted-foreground text-xs font-normal group-hover:underline">Flicking</span>
+            </button>
+
+            <button
+              onClick={() =>
+                setUserListModal({
+                  open: true,
+                  type: "flickers",
+                  title: `Flickers (${counts.flickers})`,
+                })
+              }
+              className="group text-left hover:opacity-80 transition cursor-pointer active:scale-95"
+            >
+              <span className="font-bold font-display text-foreground text-base tabular-nums group-hover:text-snap transition">
                 {counts.flickers.toLocaleString()}
               </span>{" "}
-              <span className="text-muted-foreground text-xs font-normal">Flickers</span>
-            </div>
-            <div>
-              <span className="font-bold font-display text-foreground text-base tabular-nums">
+              <span className="text-muted-foreground text-xs font-normal group-hover:underline">Flickers</span>
+            </button>
+
+            <button
+              onClick={() =>
+                setUserListModal({
+                  open: true,
+                  type: "flicks",
+                  title: `Flicks (${counts.flicks})`,
+                })
+              }
+              className="group text-left hover:opacity-80 transition cursor-pointer active:scale-95"
+            >
+              <span className="font-bold font-display text-foreground text-base tabular-nums group-hover:text-snap transition">
                 {counts.flicks.toLocaleString()}
               </span>{" "}
-              <span className="text-muted-foreground text-xs font-normal">Flicks</span>
-            </div>
+              <span className="text-muted-foreground text-xs font-normal group-hover:underline">Flicks</span>
+            </button>
           </div>
         </div>
       </section>
@@ -593,6 +628,18 @@ export default function ProfilePage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Followers / Flickers / Flicks Modal */}
+      {user && (
+        <UserListModal
+          open={userListModal.open}
+          onClose={() => setUserListModal((prev) => ({ ...prev, open: false }))}
+          title={userListModal.title}
+          type={userListModal.type}
+          targetUserId={user.id}
+          targetUsername={profile?.handle}
+        />
+      )}
     </div>
   );
 }

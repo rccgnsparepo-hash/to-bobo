@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar } from "@/components/Avatar";
 import { PostCard, type PostRow } from "@/components/PostCard";
-import { ArrowLeft, MessageCircle, UserPlus, Check } from "lucide-react";
+import { ArrowLeft, MessageCircle, UserPlus, Check, Swords } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import {
@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import { FlickVerifiedBadge } from "@/components/FlickVerifiedBadge";
 import { isUserVerified } from "@/lib/verification";
 import { ProfileCover } from "@/components/profile/ProfileCover";
+import { UserListModal } from "@/components/profile/UserListModal";
+import { DuelModal } from "@/components/duel/DuelModal";
 
 type Profile = { id: string; handle: string; display_name: string; avatar_url: string | null; bio: string | null };
 
@@ -28,6 +30,12 @@ export default function UserProfilePage() {
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [counts, setCounts] = useState({ flicks: 0, flickers: 0, flicking: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
+  const [userListModal, setUserListModal] = useState<{
+    open: boolean;
+    type: "flickers" | "flicking" | "flicks";
+    title: string;
+  }>({ open: false, type: "flickers", title: "Flickers" });
+  const [duelOpen, setDuelOpen] = useState(false);
 
   useEffect(() => {
     if (!user || !p) return;
@@ -155,15 +163,45 @@ export default function UserProfilePage() {
           {p.bio && <p className="text-sm text-foreground/85 whitespace-pre-line leading-relaxed">{p.bio}</p>}
 
           <div className="flex gap-5 text-sm pt-1">
-            <span>
-              <b className="tabular-nums font-display">{counts.flicking}</b> <span className="text-muted-foreground text-xs font-normal">Flicking</span>
-            </span>
-            <span>
-              <b className="tabular-nums font-display">{counts.flickers}</b> <span className="text-muted-foreground text-xs font-normal">Flickers</span>
-            </span>
-            <span>
-              <b className="tabular-nums font-display">{counts.flicks}</b> <span className="text-muted-foreground text-xs font-normal">Flicks</span>
-            </span>
+            <button
+              onClick={() =>
+                setUserListModal({
+                  open: true,
+                  type: "flicking",
+                  title: `Flicking (${counts.flicking})`,
+                })
+              }
+              className="text-left hover:opacity-80 transition cursor-pointer active:scale-95"
+            >
+              <b className="tabular-nums font-display hover:text-snap transition">{counts.flicking}</b>{" "}
+              <span className="text-muted-foreground text-xs font-normal">Flicking</span>
+            </button>
+            <button
+              onClick={() =>
+                setUserListModal({
+                  open: true,
+                  type: "flickers",
+                  title: `Flickers (${counts.flickers})`,
+                })
+              }
+              className="text-left hover:opacity-80 transition cursor-pointer active:scale-95"
+            >
+              <b className="tabular-nums font-display hover:text-snap transition">{counts.flickers}</b>{" "}
+              <span className="text-muted-foreground text-xs font-normal">Flickers</span>
+            </button>
+            <button
+              onClick={() =>
+                setUserListModal({
+                  open: true,
+                  type: "flicks",
+                  title: `Flicks (${counts.flicks})`,
+                })
+              }
+              className="text-left hover:opacity-80 transition cursor-pointer active:scale-95"
+            >
+              <b className="tabular-nums font-display hover:text-snap transition">{counts.flicks}</b>{" "}
+              <span className="text-muted-foreground text-xs font-normal">Flicks</span>
+            </button>
           </div>
         </div>
       </motion.section>
@@ -190,6 +228,16 @@ export default function UserProfilePage() {
             )}
           </button>
         )}
+        {user?.id !== p.id && (
+          <button
+            onClick={() => setDuelOpen(true)}
+            className="px-4 bg-red-500/15 hover:bg-red-500/25 text-red-400 font-bold py-2.5 rounded-full text-sm flex items-center justify-center gap-1.5 border border-red-500/30 transition active:scale-95"
+            title="Challenge to Realtime Duel"
+          >
+            <Swords className="w-4 h-4" />
+            <span>Duel</span>
+          </button>
+        )}
         <Link
           to={`/messages/${p.id}`}
           className="flex-1 text-center bg-secondary hover:bg-secondary/80 text-foreground font-bold py-2.5 rounded-full text-sm flex items-center justify-center gap-2 border border-border transition"
@@ -207,6 +255,42 @@ export default function UserProfilePage() {
           ))}
         </div>
       </div>
+
+      {p && (
+        <UserListModal
+          open={userListModal.open}
+          onClose={() => setUserListModal((prev) => ({ ...prev, open: false }))}
+          title={userListModal.title}
+          type={userListModal.type}
+          targetUserId={p.id}
+          targetUsername={p.handle}
+        />
+      )}
+
+      {p && (
+        <DuelModal
+          open={duelOpen}
+          onClose={() => setDuelOpen(false)}
+          opponent={{
+            id: p.id,
+            handle: p.handle,
+            display_name: p.display_name,
+            avatar_url: p.avatar_url,
+            bio: p.bio,
+            rank: 3,
+            flicksCount: counts.flicks,
+            recentFlicksCount: counts.flicks,
+            likesReceived: 12,
+            commentsReceived: 6,
+            resharesReceived: 2,
+            engagementScore: counts.flicks * 15 + 48,
+            badgeTitle: "Challenger",
+            badgeIcon: "⚔️",
+            badgeColor: "from-red-500 to-amber-500",
+            haloColor: "rgba(239, 68, 68, 0.4)",
+          }}
+        />
+      )}
     </>
   );
 }

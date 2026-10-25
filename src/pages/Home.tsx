@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StoriesBar, type StoryGroup } from "@/components/StoriesBar";
 import { StoryViewer } from "@/components/StoryViewer";
+import { TopFlickersBar } from "@/components/home/TopFlickersBar";
 import { Composer } from "@/components/Composer";
 import { PostCard, type PostRow } from "@/components/PostCard";
 import { Avatar } from "@/components/Avatar";
@@ -338,6 +339,9 @@ export default function HomePage() {
 
       {/* Stories Bar at top */}
       {!searching && <StoriesBar onView={(groups, index) => setViewer({ groups, index })} />}
+
+      {/* Top Flickers Hall of Fame */}
+      {!searching && <TopFlickersBar />}
 
       {/* Composer */}
       {!searching && <Composer onPosted={load} />}

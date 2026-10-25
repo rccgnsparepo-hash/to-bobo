@@ -174,12 +174,32 @@ export function NotificationsInbox({ open, onClose }: { open: boolean; onClose: 
     };
   }, [open, user, load]);
 
+  const [flickingIds, setFlickingIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const raw = localStorage.getItem(`flick:flicking:${user.id}`);
+      if (raw) setFlickingIds(JSON.parse(raw));
+    } catch {}
+  }, [user, open]);
+
   const ping = () => window.dispatchEvent(new Event("flick:notifications-updated"));
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return dedupe(items).filter((n) => {
       if (archived.has(n.id)) return false;
+
+      // Filter: Only see notifications from people you follow (unless system, message, or follow alert)
+      if (n.actor_id && n.actor_id !== user?.id) {
+        if (!["system", "message", "follow"].includes(n.kind)) {
+          if (!flickingIds.includes(n.actor_id)) {
+            return false;
+          }
+        }
+      }
+
       if (q && !`${n.title} ${n.body ?? ""}`.toLowerCase().includes(q)) return false;
       if (filter === "Unread") return !n.read_at;
       if (filter === "Stories") return n.kind === "story";
@@ -188,7 +208,7 @@ export function NotificationsInbox({ open, onClose }: { open: boolean; onClose: 
       if (filter === "Messages") return n.kind === "message";
       return true;
     });
-  }, [items, filter, query, archived]);
+  }, [items, filter, query, archived, user, flickingIds]);
 
   const sections = useMemo(() => sectionize(visible), [visible]);
   const unreadTotal = useMemo(() => items.filter((n) => !n.read_at).length, [items]);

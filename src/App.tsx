@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/AppShell";
+import { PageTransition } from "@/components/PageTransition";
 import HomePage from "@/pages/Home";
 import CameraPage from "@/pages/Camera";
 import MessagesPage from "@/pages/Messages";
@@ -60,6 +62,157 @@ function Protected({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AnimatedRoutes() {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <Routes location={location} key={location.pathname}>
+        <Route
+          path="/intro"
+          element={
+            <PageTransition>
+              <IntroPage />
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/auth"
+          element={
+            <PageTransition>
+              <AuthPage />
+            </PageTransition>
+          }
+        />
+        <Route path="/.lovable/oauth/consent" element={<OAuthConsentPage />} />
+        <Route
+          element={
+            <Protected>
+              <AppShell />
+            </Protected>
+          }
+        >
+          <Route
+            path="/"
+            element={
+              <PageTransition>
+                <HomePage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/camera"
+            element={
+              <PageTransition>
+                <CameraPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/stories/new"
+            element={
+              <PageTransition>
+                <StoryComposerPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <PageTransition>
+                <MessagesPage />
+              </PageTransition>
+            }
+          >
+            <Route path=":userId" element={<ThreadPage />} />
+          </Route>
+          <Route
+            path="/profile"
+            element={
+              <PageTransition>
+                <ProfilePage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/verification"
+            element={
+              <PageTransition>
+                <VerificationPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/creator-insights"
+            element={
+              <PageTransition>
+                <CreatorInsightsPage />
+              </PageTransition>
+            }
+          />
+          <Route path="/insights" element={<Navigate to="/creator-insights" replace />} />
+          <Route
+            path="/challenges"
+            element={
+              <PageTransition>
+                <ChallengesPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/news"
+            element={
+              <PageTransition>
+                <NewsPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/news/read"
+            element={
+              <PageTransition>
+                <NewsReaderPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/u/:handle"
+            element={
+              <PageTransition>
+                <UserProfilePage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/comics"
+            element={
+              <PageTransition>
+                <ComicsPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/comics/:id"
+            element={
+              <PageTransition>
+                <ComicReaderPage />
+              </PageTransition>
+            }
+          />
+        </Route>
+        <Route
+          path="*"
+          element={
+            <PageTransition>
+              <NotFound />
+            </PageTransition>
+          }
+        />
+      </Routes>
+    </AnimatePresence>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -72,36 +225,7 @@ export default function App() {
               <SystemLifeCycle />
               <NotchNotification />
               <InteractiveMorphToast />
-              <Routes>
-                <Route path="/intro" element={<IntroPage />} />
-                <Route path="/auth" element={<AuthPage />} />
-                <Route path="/.lovable/oauth/consent" element={<OAuthConsentPage />} />
-                <Route
-                  element={
-                    <Protected>
-                      <AppShell />
-                    </Protected>
-                  }
-                >
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/camera" element={<CameraPage />} />
-                  <Route path="/stories/new" element={<StoryComposerPage />} />
-                  <Route path="/messages" element={<MessagesPage />}>
-                    <Route path=":userId" element={<ThreadPage />} />
-                  </Route>
-                  <Route path="/profile" element={<ProfilePage />} />
-                  <Route path="/verification" element={<VerificationPage />} />
-                  <Route path="/creator-insights" element={<CreatorInsightsPage />} />
-                  <Route path="/insights" element={<Navigate to="/creator-insights" replace />} />
-                  <Route path="/challenges" element={<ChallengesPage />} />
-                  <Route path="/news" element={<NewsPage />} />
-                  <Route path="/news/read" element={<NewsReaderPage />} />
-                  <Route path="/u/:handle" element={<UserProfilePage />} />
-                  <Route path="/comics" element={<ComicsPage />} />
-                  <Route path="/comics/:id" element={<ComicReaderPage />} />
-                </Route>
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+              <AnimatedRoutes />
               <Toaster theme="dark" />
             </TenantProvider>
           </Auth3DToastProvider>
