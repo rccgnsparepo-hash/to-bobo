@@ -74,7 +74,7 @@ const PRIORITY_STYLE: Record<string, string> = {
   low: "bg-secondary/60 text-muted-foreground/80 border-border",
 };
 
-export const getReadCache = (userId: string): Set<string> => {
+const getReadCache = (userId: string): Set<string> => {
   try {
     return new Set(JSON.parse(localStorage.getItem(`flick:read_notifs_${userId}`) ?? "[]"));
   } catch {
@@ -82,7 +82,7 @@ export const getReadCache = (userId: string): Set<string> => {
   }
 };
 
-export const saveReadCache = (userId: string, ids: string[]) => {
+const saveReadCache = (userId: string, ids: string[]) => {
   try {
     const existing = getReadCache(userId);
     ids.forEach((i) => existing.add(i));
@@ -212,7 +212,7 @@ export function NotificationsInbox({ open, onClose }: { open: boolean; onClose: 
       if (filter === "Messages") return n.kind === "message";
       return true;
     });
-  }, [items, filter, query, archived, user, flickingIds, prefs]);
+  }, [items, filter, query, archived, user, flickingIds]);
 
   const sections = useMemo(() => sectionize(visible), [visible]);
   const unreadTotal = useMemo(() => visible.filter((n) => !n.read_at).length, [visible]);

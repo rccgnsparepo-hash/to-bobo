@@ -2,10 +2,10 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Plus, X, Check } from "lucide-react";
 
-export const DEFAULT_QUICK_REPLIES = ["lol", "🔥", "nice", "😂", "❤️", "bet"];
+const DEFAULT_QUICK_REPLIES = ["lol", "🔥", "nice", "😂", "❤️", "bet"];
 const STORAGE_KEY = "flick:custom_quick_replies";
 
-export function getSavedQuickReplies(): string[] {
+function getSavedQuickReplies(): string[] {
   if (typeof window === "undefined") return DEFAULT_QUICK_REPLIES;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -17,7 +17,7 @@ export function getSavedQuickReplies(): string[] {
   }
 }
 
-export function saveQuickReplies(list: string[]) {
+function saveQuickReplies(list: string[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {}

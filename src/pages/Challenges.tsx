@@ -289,7 +289,16 @@ export default function ChallengesPage() {
     return () => {
       alive = false;
     };
-  }, [user?.id]);
+  }, [user]);
+
+  const handleTimeUp = () => {
+    setIsAnswered(true);
+    setStreak(0);
+    setMultiplier(1);
+    soundEngine.play("auth_error");
+    triggerLightHaptic();
+    toast.error("Time's up! Speed matters in the arena.");
+  };
 
   // Mind Duel timer loop
   useEffect(() => {
@@ -323,15 +332,6 @@ export default function ChallengesPage() {
     setGameActive(true);
     triggerLightHaptic();
     soundEngine.play("notification_chime");
-  };
-
-  const handleTimeUp = () => {
-    setIsAnswered(true);
-    setStreak(0);
-    setMultiplier(1);
-    soundEngine.play("auth_error");
-    triggerLightHaptic();
-    toast.error("Time's up! Speed matters in the arena.");
   };
 
   const handlePickOption = (optionId: string, isTarget: boolean) => {
