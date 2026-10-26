@@ -32,7 +32,7 @@ let state: GlobalAudioState = {
 function getAudio(): HTMLAudioElement {
   if (!audioEl && typeof window !== "undefined") {
     audioEl = new Audio();
-    audioEl.preload = "auto";
+    audioEl.preload = "none";
 
     audioEl.addEventListener("timeupdate", () => {
       if (!audioEl) return;
@@ -115,6 +115,7 @@ export function playGlobalAudio(params: {
     return;
   }
 
+  a.preload = "auto";
   a.src = params.src;
   a.currentTime = 0;
   state = {

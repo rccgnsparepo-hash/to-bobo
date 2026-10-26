@@ -47,6 +47,8 @@ import { useLenis } from "@/lib/useLenis";
 import { initRealtimePushEngine, requestDesktopNotificationPermission } from "@/lib/realtimeNotifications";
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { RightRail } from "./layout/RightRail";
+import { SecurityStatusBanner } from "./security/SecurityStatusBanner";
+import { SecurityInspectorModal } from "./security/SecurityInspectorModal";
 
 const tabs: { to: string; icon: typeof Home; label: string; center?: boolean; action?: boolean }[] = [
   { to: "/", icon: Home, label: "Home" },
@@ -69,9 +71,16 @@ export function AppShell() {
   const [unreadDMs, setUnreadDMs] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
   const [postModalOpen, setPostModalOpen] = useState(false);
+  const [securityInspectorOpen, setSecurityInspectorOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
 
   useHomeCameraSwipe();
+
+  useEffect(() => {
+    const handleOpenInspector = () => setSecurityInspectorOpen(true);
+    window.addEventListener("flick:open-security-inspector", handleOpenInspector);
+    return () => window.removeEventListener("flick:open-security-inspector", handleOpenInspector);
+  }, []);
 
   useEffect(() => {
     return initOfflineEngine(setIsOnline);
@@ -475,6 +484,7 @@ export function AppShell() {
             </div>
           </div>
         )}
+        <SecurityStatusBanner onOpenInspector={() => setSecurityInspectorOpen(true)} />
         <AnimatePresence mode="wait">
           <motion.div
             key={pathname}
@@ -707,6 +717,10 @@ export function AppShell() {
       />
       <FlickPostModal open={postModalOpen} onClose={() => setPostModalOpen(false)} />
       <GlobalAudioOverlay />
+      <SecurityInspectorModal
+        isOpen={securityInspectorOpen}
+        onClose={() => setSecurityInspectorOpen(false)}
+      />
     </div>
   );
 }

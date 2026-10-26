@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   Search,
   Slash,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProfileSettings } from "@/components/ProfileSettings";
@@ -302,6 +303,14 @@ export default function ProfilePage() {
 
         <div className="flex items-center gap-1">
           <button
+            onClick={() => window.dispatchEvent(new CustomEvent("flick:open-security-inspector"))}
+            aria-label="Security & Trust Inspector"
+            title="Security & Trust Inspector"
+            className="w-9 h-9 rounded-full hover:bg-secondary grid place-items-center transition text-emerald-400 hover:text-emerald-300"
+          >
+            <Shield className="w-4 h-4" />
+          </button>
+          <button
             onClick={shareProfile}
             aria-label="Share profile"
             className="w-9 h-9 rounded-full hover:bg-secondary grid place-items-center transition text-muted-foreground hover:text-foreground"
@@ -513,13 +522,22 @@ export default function ProfilePage() {
             ) : (
               reelPosts.map((p) => (
                 <div key={p.id} className="aspect-[9/16] rounded-2xl bg-secondary overflow-hidden relative">
-                  <video
-                    src={p.media_url || ""}
-                    className="w-full h-full object-cover"
-                    muted
-                    loop
-                    playsInline
-                  />
+                  {p.media_url ? (
+                    <video
+                      src={p.media_url}
+                      className="w-full h-full object-cover"
+                      muted
+                      loop
+                      playsInline
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-secondary/80 flex items-center justify-center text-muted-foreground text-xs">
+                      Video
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent p-3 flex flex-col justify-end">
                     <p className="text-xs text-white line-clamp-2">{p.content}</p>
                   </div>

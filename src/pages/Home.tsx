@@ -486,10 +486,32 @@ export default function HomePage() {
                   className="card-glass rounded-3xl overflow-hidden shrink-0 w-[220px] shadow-xl cursor-pointer group border border-border/80 hover:border-snap/50 transition-all"
                 >
                   <div className="relative h-[200px] bg-secondary">
-                    {p.media_type === "video" ? (
-                      <video src={src} muted loop autoPlay playsInline className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                    {p.media_type === "video" && src ? (
+                      <video
+                        src={src}
+                        muted
+                        loop
+                        autoPlay
+                        playsInline
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : src ? (
+                      <img
+                        src={src}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = "none";
+                        }}
+                      />
                     ) : (
-                      <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+                      <div className="w-full h-full bg-secondary/80 flex items-center justify-center text-muted-foreground text-xs font-bold">
+                        flick
+                      </div>
                     )}
                     <span className="absolute top-2 left-2 bg-background/80 backdrop-blur text-[10px] px-2 py-1 rounded-full font-medium shadow-sm">
                       {formatDistanceToNowStrict(new Date(p.created_at))}

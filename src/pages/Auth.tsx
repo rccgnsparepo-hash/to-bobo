@@ -18,9 +18,21 @@ import {
   Info,
   Check,
   RefreshCw,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { sendFirebasePasswordReset } from "@/lib/firebaseAuth";
 import { fireAuthConfetti } from "@/lib/confetti";
+import {
+  evaluateRegistrationAttempt,
+  finalizeAccountRegistration,
+  requestRegistrationPermit,
+  type SecurityEvaluation,
+} from "@/lib/securityService";
+import { SecurityChallengeModal } from "@/components/security/SecurityChallengeModal";
+import { SecurityBlockModal } from "@/components/security/SecurityBlockModal";
+import { SecurityInspectorModal } from "@/components/security/SecurityInspectorModal";
 
 type FeedbackState = {
   type: "error" | "success" | "warning" | "info";
@@ -58,6 +70,10 @@ export default function AuthPage() {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const [showSecurityChallenge, setShowSecurityChallenge] = useState(false);
+  const [showSecurityBlock, setShowSecurityBlock] = useState(false);
+  const [showSecurityInspector, setShowSecurityInspector] = useState(false);
+  const [latestEvaluation, setLatestEvaluation] = useState<SecurityEvaluation | null>(null);
 
   // Recovery state for resetting password
   const [isRecovery, setIsRecovery] = useState(() => {
@@ -150,6 +166,69 @@ export default function AuthPage() {
     return true;
   };
 
+  const executeSignUp = async (permitToken: string, verifiedPhone?: string) => {
+    setBusy(true);
+    setStatusStep("Registering profile & secure keys...");
+    try {
+      const cleanHandle = handle.trim().replace(/^@/, "").toLowerCase();
+      const returnUrl = next ? window.location.origin + next : window.location.origin;
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          emailRedirectTo: returnUrl,
+          data: {
+            handle: cleanHandle || email.split("@")[0].toLowerCase(),
+            display_name: cleanHandle || email.split("@")[0],
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      // Finalize server-authoritative registration permit & security cluster
+      const accountId = data.user?.id || `acc_${Date.now()}`;
+      await finalizeAccountRegistration({
+        permitToken,
+        accountId,
+        email: email.trim(),
+        handle: cleanHandle || email.split("@")[0].toLowerCase(),
+        phone: verifiedPhone,
+      }).catch((err) => console.warn("Security permit record:", err));
+
+      // Sweet Success animation with confetti burst
+      setIsSuccessAnimated(true);
+      fireAuthConfetti();
+
+      setSuccessModal({
+        title: "Success!",
+        description: data.session
+          ? "Your Flick account was created and verified."
+          : "We have sent an email verification to",
+        email: email.trim(),
+        actionLabel: "PROCEED",
+        onProceed: () => {
+          if (next) window.location.replace(next);
+          else nav("/", { replace: true });
+        },
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        title: "Sign Up Failed",
+        message: err.message || "Failed to create account. Please try again.",
+      });
+      trigger3DToast({
+        type: "error",
+        title: "Registration Failed",
+        description: err.message || "Could not register account.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy || isSuccessAnimated) return;
@@ -203,44 +282,51 @@ export default function AuthPage() {
 
     setBusy(true);
     setFeedback(null);
-    setStatusStep(mode === "signup" ? "Creating your Flick account..." : "Verifying credentials...");
+    setStatusStep(mode === "signup" ? "Evaluating security & identity signals..." : "Verifying credentials...");
 
     try {
       if (mode === "signup") {
         const cleanHandle = handle.trim().replace(/^@/, "").toLowerCase();
-        const returnUrl = next ? window.location.origin + next : window.location.origin;
 
-        setStatusStep("Registering profile & secure keys...");
-        const { data, error } = await supabase.auth.signUp({
+        // Run multi-layered registration security evaluation
+        const evalRes = await evaluateRegistrationAttempt({
           email: email.trim(),
-          password,
-          options: {
-            emailRedirectTo: returnUrl,
-            data: {
-              handle: cleanHandle || email.split("@")[0].toLowerCase(),
-              display_name: cleanHandle || email.split("@")[0],
-            },
-          },
+          handle: cleanHandle,
         });
 
-        if (error) throw error;
+        setLatestEvaluation(evalRes);
 
-        // Sweet Success animation with confetti burst (as seen in video at 0:15!)
-        setIsSuccessAnimated(true);
-        fireAuthConfetti();
+        // Outcome 1: Critical Risk - Block registration immediately
+        if (evalRes.riskTier === "critical" || !evalRes.allowed) {
+          setBusy(false);
+          setShowSecurityBlock(true);
+          trigger3DToast({
+            type: "error",
+            title: "Registration Blocked",
+            description: "Excessive accounts or suspicious syndicate patterns detected.",
+          });
+          return;
+        }
 
-        setSuccessModal({
-          title: "Success!",
-          description: data.session
-            ? "Your Flick account was created and verified."
-            : "We have sent an email verification to",
-          email: email.trim(),
-          actionLabel: "PROCEED",
-          onProceed: () => {
-            if (next) window.location.replace(next);
-            else nav("/", { replace: true });
-          },
-        });
+        // Outcome 2: Medium / High Risk - Trigger CAPTCHA or Phone Step-Up
+        if (evalRes.actionRequired === "captcha" || evalRes.actionRequired === "phone_and_captcha") {
+          setBusy(false);
+          setShowSecurityChallenge(true);
+          return;
+        }
+
+        // Outcome 3: Low Risk - Standard registration with authoritative permit
+        if (evalRes.permitToken) {
+          await executeSignUp(evalRes.permitToken);
+        } else {
+          const permit = await requestRegistrationPermit({
+            email: email.trim(),
+            riskTier: evalRes.riskTier,
+            riskScore: evalRes.riskScore,
+            featureLimits: evalRes.featureLimits,
+          });
+          await executeSignUp(permit);
+        }
       } else {
         setStatusStep("Authenticating session...");
         const { error } = await supabase.auth.signInWithPassword({
@@ -818,6 +904,17 @@ export default function AuthPage() {
                     : "New to Flick? Create an account →"}
                 </button>
               </div>
+
+              <div className="pt-4 border-t border-border/60 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowSecurityInspector(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/60 hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Flick Abuse Shields & Security Inspector</span>
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -933,6 +1030,40 @@ export default function AuthPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Security Challenge Modal for Medium/High Risk */}
+      {latestEvaluation && (
+        <SecurityChallengeModal
+          isOpen={showSecurityChallenge}
+          evaluation={latestEvaluation}
+          email={email.trim()}
+          onCancel={() => setShowSecurityChallenge(false)}
+          onSuccess={(permitToken, verifiedPhone) => {
+            setShowSecurityChallenge(false);
+            executeSignUp(permitToken, verifiedPhone);
+          }}
+        />
+      )}
+
+      {/* Security Block Modal for Critical Risk */}
+      {latestEvaluation && (
+        <SecurityBlockModal
+          isOpen={showSecurityBlock}
+          evaluation={latestEvaluation}
+          email={email.trim()}
+          onClose={() => setShowSecurityBlock(false)}
+          onOpenInspector={() => {
+            setShowSecurityBlock(false);
+            setShowSecurityInspector(true);
+          }}
+        />
+      )}
+
+      {/* Interactive Security Inspector Modal */}
+      <SecurityInspectorModal
+        isOpen={showSecurityInspector}
+        onClose={() => setShowSecurityInspector(false)}
+      />
     </main>
   );
 }

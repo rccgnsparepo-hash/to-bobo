@@ -99,27 +99,36 @@ class NotificationAudioEngine {
    * Plays a custom audio file with fallback detection
    */
   public async playCustomAudioFile(url: string, volume = 0.85): Promise<boolean> {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined" || !url || typeof url !== "string") return false;
     return new Promise((resolve) => {
       try {
-        const audio = new Audio(url);
+        const audio = new Audio();
+        audio.preload = "auto";
         audio.volume = Math.max(0, Math.min(1, volume));
         let finished = false;
 
         const cleanup = (success: boolean) => {
           if (finished) return;
           finished = true;
-          audio.pause();
-          audio.remove();
+          try {
+            audio.pause();
+            audio.removeAttribute("src");
+            audio.load();
+            audio.remove();
+          } catch {}
           resolve(success);
         };
 
         audio.addEventListener("ended", () => cleanup(true));
-        audio.addEventListener("error", () => cleanup(false));
+        audio.addEventListener("error", (e) => {
+          e.preventDefault?.();
+          cleanup(false);
+        });
 
         // Safety timeout if audio stalls
-        const timer = setTimeout(() => cleanup(false), 7000);
+        const timer = setTimeout(() => cleanup(false), 5000);
 
+        audio.src = url;
         audio
           .play()
           .then(() => {

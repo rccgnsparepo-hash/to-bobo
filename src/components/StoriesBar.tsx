@@ -84,8 +84,19 @@ export function StoriesBar({ onView }: { onView: (groups: StoryGroup[], index: n
             <div className="w-full h-full rounded-full bg-background p-0.5 relative overflow-hidden">
               {(() => {
                 const latest = g.segments[g.segments.length - 1];
-                if (latest.media_type === "video") {
-                  return <video src={latest.image_url} muted playsInline preload="metadata" className="w-full h-full rounded-full object-cover" />;
+                if (latest.media_type === "video" && latest.image_url) {
+                  return (
+                    <video
+                      src={latest.image_url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full rounded-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  );
                 }
                 if (latest.image_url) {
                   return <img src={latest.image_url} alt="" className="w-full h-full rounded-full object-cover" />;

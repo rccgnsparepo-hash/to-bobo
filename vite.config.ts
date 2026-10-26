@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
+import { handleSecurityMiddleware } from "./src/server/securityApiHandler";
 
 function wallpaperApiProxyPlugin() {
   return {
@@ -132,9 +133,28 @@ function wallpaperApiProxyPlugin() {
   };
 }
 
+function registrationSecurityPlugin() {
+  return {
+    name: "registration-security-api",
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        try {
+          const handled = await handleSecurityMiddleware(req, res);
+          if (!handled) {
+            next();
+          }
+        } catch (err) {
+          next(err);
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
   server: { host: "0.0.0.0", port: 3000, allowedHosts: true },
   plugins: [
+    registrationSecurityPlugin(),
     wallpaperApiProxyPlugin(),
     react(),
     tailwindcss(),

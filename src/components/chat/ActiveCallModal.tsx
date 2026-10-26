@@ -326,6 +326,7 @@ export function ActiveCallModal({ open, peer, callType: initialType, onClose }: 
                         autoPlay
                         playsInline
                         muted
+                        onError={(e) => e.preventDefault()}
                         className="w-full h-full object-cover mirror"
                         style={{ transform: "scaleX(-1)" }}
                       />

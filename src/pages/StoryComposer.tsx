@@ -685,6 +685,7 @@ export default function StoryComposerPage() {
                 autoPlay
                 playsInline
                 muted
+                onError={(e) => e.preventDefault()}
                 style={{ transform: facing === "user" ? "scaleX(-1)" : undefined }}
                 className="w-full h-full object-cover"
               />
