@@ -14,8 +14,8 @@ export interface CachedFeed {
 const CACHE_KEYS = {
   feed: "flick:offline:home_feed",
   stories: "flick:offline:stories",
-  comics: "flick:offline:comics",
-  readingHistory: "flick:offline:comic_history",
+  wallpapers: "flick:offline:wallpapers",
+  readingHistory: "flick:offline:reading_history",
   profilePrefix: "flick:offline:profile:",
 };
 
@@ -178,22 +178,22 @@ export function getOfflineFeed(): CachedFeed | null {
 }
 
 /**
- * Cache comics catalogue & reading state
+ * Cache wallpapers catalogue
  */
-export function saveComicsOffline(books: unknown[]) {
+export function saveWallpapersOffline(pins: unknown[]) {
   try {
     localStorage.setItem(
-      CACHE_KEYS.comics,
-      JSON.stringify({ books: books.slice(0, 100), savedAt: Date.now() })
+      CACHE_KEYS.wallpapers,
+      JSON.stringify({ pins: pins.slice(0, 100), savedAt: Date.now() })
     );
   } catch {}
 }
 
-export function getOfflineComics(): unknown[] {
+export function getOfflineWallpapers(): unknown[] {
   try {
-    const raw = localStorage.getItem(CACHE_KEYS.comics);
+    const raw = localStorage.getItem(CACHE_KEYS.wallpapers);
     if (!raw) return [];
-    return JSON.parse(raw).books || [];
+    return JSON.parse(raw).pins || [];
   } catch {
     return [];
   }

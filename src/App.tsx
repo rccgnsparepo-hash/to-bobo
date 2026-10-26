@@ -13,8 +13,8 @@ import ThreadPage from "@/pages/Thread";
 import ProfilePage from "@/pages/Profile";
 import StoryComposerPage from "@/pages/StoryComposer";
 import ChallengesPage from "@/pages/Challenges";
-import ComicsPage from "@/pages/Comics";
-import ComicReaderPage from "@/pages/ComicReader";
+import WallpapersPage from "@/pages/Wallpapers";
+import FlickGamesPage from "@/pages/FlickGames";
 import AuthPage from "@/pages/Auth";
 import OAuthConsentPage from "@/pages/OAuthConsent";
 import IntroPage from "@/pages/Intro";
@@ -187,21 +187,23 @@ function AnimatedRoutes() {
             }
           />
           <Route
-            path="/comics"
+            path="/wallpapers"
             element={
               <PageTransition>
-                <ComicsPage />
+                <WallpapersPage />
               </PageTransition>
             }
           />
           <Route
-            path="/comics/:id"
+            path="/games"
             element={
               <PageTransition>
-                <ComicReaderPage />
+                <FlickGamesPage />
               </PageTransition>
             }
           />
+          <Route path="/comics" element={<Navigate to="/wallpapers" replace />} />
+          <Route path="/comics/:id" element={<Navigate to="/wallpapers" replace />} />
           <Route
             path="/post/:id"
             element={

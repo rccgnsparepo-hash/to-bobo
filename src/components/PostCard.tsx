@@ -69,6 +69,8 @@ export function PostCard({ post }: { post: PostRow }) {
   const [commentCount, setCommentCount] = useState(0);
   const [showComments, setShowComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [sendingComment, setSendingComment] = useState(false);
+  const [pendingCommentDraft, setPendingCommentDraft] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [draft, setDraft] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
@@ -294,52 +296,60 @@ export function PostCard({ post }: { post: PostRow }) {
   };
 
   const sendComment = async () => {
-    if (!user || !draft.trim()) return;
+    if (!user || !draft.trim() || sendingComment) return;
     const c = draft.trim();
+    setPendingCommentDraft(c);
+    setSendingComment(true);
     setDraft("");
 
     try {
-      playSound("message_sent");
-    } catch {}
+      try {
+        playSound("message_sent");
+      } catch {}
 
-    const { error } = await supabase
-      .from("comments")
-      .insert({ post_id: post.id, author_id: user.id, content: c });
+      const { error } = await supabase
+        .from("comments")
+        .insert({ post_id: post.id, author_id: user.id, content: c });
 
-    if (error) {
-      toast.error("Failed to post comment");
-      return;
+      if (error) {
+        toast.error("Failed to post comment");
+        setDraft(c);
+        return;
+      }
+
+      setCommentCount((prev) => prev + 1);
+
+      if (post.author?.id && post.author.id !== user.id) {
+        const actorName =
+          profile?.display_name ||
+          user.user_metadata?.display_name ||
+          user.user_metadata?.full_name ||
+          "Someone";
+        const actorHandle = profile?.handle || user.user_metadata?.handle || "user";
+        const actorAvatar = profile?.avatar_url || user.user_metadata?.avatar_url || null;
+
+        notify({
+          kind: "comment",
+          title: `${actorName} commented on your flick`,
+          message: c.slice(0, 100),
+          actor: {
+            id: user.id,
+            display_name: actorName,
+            handle: actorHandle,
+            avatar_url: actorAvatar,
+          },
+          data: { post_id: post.id },
+          recipients: [post.author.id],
+          url: `/u/${post.author.handle}`,
+        });
+      }
+
+      const reloaded = await fetchCommentsForPost();
+      setComments(reloaded);
+    } finally {
+      setSendingComment(false);
+      setPendingCommentDraft(null);
     }
-
-    setCommentCount((prev) => prev + 1);
-
-    if (post.author?.id && post.author.id !== user.id) {
-      const actorName =
-        profile?.display_name ||
-        user.user_metadata?.display_name ||
-        user.user_metadata?.full_name ||
-        "Someone";
-      const actorHandle = profile?.handle || user.user_metadata?.handle || "user";
-      const actorAvatar = profile?.avatar_url || user.user_metadata?.avatar_url || null;
-
-      notify({
-        kind: "comment",
-        title: `${actorName} commented on your flick`,
-        message: c.slice(0, 100),
-        actor: {
-          id: user.id,
-          display_name: actorName,
-          handle: actorHandle,
-          avatar_url: actorAvatar,
-        },
-        data: { post_id: post.id },
-        recipients: [post.author.id],
-        url: `/u/${post.author.handle}`,
-      });
-    }
-
-    const reloaded = await fetchCommentsForPost();
-    setComments(reloaded);
   };
 
   const deleteComment = async (commentId: string) => {
@@ -634,6 +644,8 @@ export function PostCard({ post }: { post: PostRow }) {
             postSnippet={post.content}
             comments={comments}
             loading={loadingComments}
+            sending={sendingComment}
+            pendingDraft={pendingCommentDraft}
             draft={draft}
             setDraft={setDraft}
             onSend={sendComment}
@@ -656,6 +668,8 @@ function CommentSheet({
   postSnippet,
   comments,
   loading,
+  sending,
+  pendingDraft,
   draft,
   setDraft,
   onSend,
@@ -668,6 +682,8 @@ function CommentSheet({
   postSnippet?: string;
   comments: Comment[];
   loading: boolean;
+  sending?: boolean;
+  pendingDraft?: string | null;
   draft: string;
   setDraft: React.Dispatch<React.SetStateAction<string>> | ((s: string) => void);
   onSend: () => void;
@@ -837,6 +853,48 @@ function CommentSheet({
               );
             })
           )}
+
+          {/* Subtle Instant Loading Spinner & Skeleton State for Pending Comment */}
+          <AnimatePresence>
+            {sending && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.18 }}
+                className="flex gap-3 text-sm p-3 rounded-2xl bg-snap/[0.04] border border-snap/30"
+              >
+                <div className="relative shrink-0">
+                  <Avatar url={user?.user_metadata?.avatar_url} name={user?.user_metadata?.display_name || user?.email} size={36} />
+                  <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-background border border-border grid place-items-center shadow-sm">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-snap" />
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="font-bold text-foreground">
+                      {user?.user_metadata?.display_name || "You"}
+                    </span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-snap font-medium">
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                      <span>Posting…</span>
+                    </span>
+                  </div>
+                  {pendingDraft ? (
+                    <p className="text-sm text-foreground/80 break-words leading-relaxed">
+                      {pendingDraft}
+                    </p>
+                  ) : (
+                    <div className="space-y-1 pt-1">
+                      <div className="h-3 bg-muted/60 rounded w-3/4 animate-pulse" />
+                      <div className="h-3 bg-muted/40 rounded w-1/2 animate-pulse" />
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Quick Reactions & Laugh Emojis Bar with More Button */}
@@ -908,11 +966,15 @@ function CommentSheet({
           />
           <button
             type="submit"
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || sending}
             className="w-10 h-10 rounded-full bg-snap text-snap-foreground grid place-items-center hover:brightness-110 active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none shrink-0 shadow-sm"
             title="Post comment"
           >
-            <Send className="w-4 h-4" />
+            {sending ? (
+              <Loader2 className="w-4 h-4 animate-spin text-black" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
           </button>
         </form>
       </motion.div>

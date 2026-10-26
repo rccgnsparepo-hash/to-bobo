@@ -62,7 +62,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       id: "tenant_public",
       name: "Public Flick Universe",
       slug: "public",
-      description: "The global feed, public stories, comics, and community chats.",
+      description: "The global feed, public stories, wallpapers, games, and community chats.",
       accent_color: "#c5e863",
       owner_id: "system",
       tier: "community" as const,

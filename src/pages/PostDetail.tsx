@@ -68,6 +68,7 @@ export default function PostDetailPage() {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [commentText, setCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [pendingCommentText, setPendingCommentText] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [reshared, setReshared] = useState(false);
@@ -93,20 +94,44 @@ export default function PostDetailPage() {
 
     const loadPost = async () => {
       try {
+        let postData: PostDetailData | null = null;
         const { data, error } = await supabase
           .from("posts")
           .select("*, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url)")
           .eq("id", id)
-          .single();
+          .maybeSingle();
 
-        if (error || !data) {
+        if (data) {
+          postData = data as unknown as PostDetailData;
+        } else {
+          // Fallback if joined query is not resolved
+          const { data: rawPost } = await supabase
+            .from("posts")
+            .select("*")
+            .eq("id", id)
+            .maybeSingle();
+
+          if (rawPost) {
+            let authorObj = null;
+            if (rawPost.author_id) {
+              const { data: p } = await supabase
+                .from("profiles")
+                .select("id, handle, display_name, avatar_url")
+                .eq("id", rawPost.author_id)
+                .maybeSingle();
+              authorObj = p;
+            }
+            postData = { ...rawPost, author: authorObj } as PostDetailData;
+          }
+        }
+
+        if (!postData) {
           toast.error("Post not found");
           setLoading(false);
           return;
         }
 
         if (isMounted) {
-          const postData = data as unknown as PostDetailData;
           setPost(postData);
 
           // Record genuine view strictly
@@ -124,7 +149,7 @@ export default function PostDetailPage() {
           }
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error loading post:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -132,15 +157,51 @@ export default function PostDetailPage() {
 
     void loadPost();
 
-    // Load comments
+    // Load comments with decoupled profiles query to avoid schema relationship errors
     const loadComments = async () => {
-      const { data } = await supabase
-        .from("comments")
-        .select("*, author:profiles!comments_author_id_fkey(handle, display_name, avatar_url)")
-        .eq("post_id", id)
-        .order("created_at", { ascending: true });
-      if (isMounted && data) {
-        setComments(data as unknown as CommentRow[]);
+      try {
+        const { data: rawComments, error } = await supabase
+          .from("comments")
+          .select("id, content, created_at, author_id")
+          .eq("post_id", id)
+          .order("created_at", { ascending: true });
+
+        if (error || !rawComments) return;
+
+        const authorIds = Array.from(new Set(rawComments.map((c) => c.author_id).filter(Boolean)));
+        const profileMap: Record<string, { handle: string; display_name: string; avatar_url: string | null }> = {};
+
+        if (authorIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, handle, display_name, avatar_url")
+            .in("id", authorIds);
+
+          (profiles || []).forEach((p) => {
+            profileMap[p.id] = {
+              handle: p.handle || "user",
+              display_name: p.display_name || "User",
+              avatar_url: p.avatar_url || null,
+            };
+          });
+        }
+
+        if (isMounted) {
+          const formattedComments: CommentRow[] = rawComments.map((c) => ({
+            id: c.id,
+            content: c.content,
+            created_at: c.created_at,
+            author_id: c.author_id,
+            author: profileMap[c.author_id] || {
+              handle: "user",
+              display_name: "User",
+              avatar_url: null,
+            },
+          }));
+          setComments(formattedComments);
+        }
+      } catch (e) {
+        console.error("Failed to load comments:", e);
       }
     };
     void loadComments();
@@ -253,19 +314,33 @@ export default function PostDetailPage() {
 
   const submitComment = async () => {
     if (!user || !post || !commentText.trim() || submittingComment) return;
-    setSubmittingComment(true);
     const textToSend = commentText.trim();
+    setPendingCommentText(textToSend);
+    setSubmittingComment(true);
     setCommentText("");
 
     try {
       const { data, error } = await supabase
         .from("comments")
         .insert({ post_id: post.id, author_id: user.id, content: textToSend })
-        .select("*, author:profiles!comments_author_id_fkey(handle, display_name, avatar_url)")
+        .select("id, content, created_at, author_id")
         .single();
 
       if (error) throw error;
-      setComments((prev) => [...prev, data as unknown as CommentRow]);
+
+      const newRow: CommentRow = {
+        id: data.id,
+        content: data.content,
+        created_at: data.created_at,
+        author_id: data.author_id,
+        author: {
+          handle: profile?.handle || "user",
+          display_name: profile?.display_name || "User",
+          avatar_url: profile?.avatar_url || null,
+        },
+      };
+
+      setComments((prev) => [...prev, newRow]);
       playSound("message");
       toast.success("Reply sent!");
 
@@ -281,8 +356,10 @@ export default function PostDetailPage() {
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to post comment");
+      setCommentText(textToSend);
     } finally {
       setSubmittingComment(false);
+      setPendingCommentText(null);
     }
   };
 
@@ -546,7 +623,10 @@ export default function PostDetailPage() {
                 className="px-4 py-1.5 rounded-full bg-snap text-black text-sm font-bold disabled:opacity-40 hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 shadow"
               >
                 {submittingComment ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Posting…</span>
+                  </>
                 ) : (
                   <>
                     <span>Reply</span>
@@ -574,7 +654,52 @@ export default function PostDetailPage() {
 
       {/* Threaded Comments / Replies Tree */}
       <section className="divide-y divide-border">
-        {comments.length === 0 ? (
+        {/* Subtle Instant Loading Spinner & Skeleton State for Pending Reply */}
+        <AnimatePresence>
+          {submittingComment && (
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.18 }}
+              className="p-4 bg-snap/[0.04] border-l-2 border-snap transition flex gap-3"
+            >
+              <div className="relative shrink-0">
+                <Avatar url={profile?.avatar_url} name={profile?.display_name || user?.email} size={40} />
+                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-background border border-border grid place-items-center shadow-sm">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin text-snap" />
+                </span>
+              </div>
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-bold text-foreground">
+                    {profile?.display_name ?? "You"}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    @{profile?.handle ?? "user"}
+                  </span>
+                  <span className="text-muted-foreground text-xs">·</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-snap font-medium">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Posting…</span>
+                  </span>
+                </div>
+                {pendingCommentText ? (
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words leading-relaxed">
+                    {pendingCommentText}
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="h-3.5 bg-muted/60 rounded w-4/5 animate-pulse" />
+                    <div className="h-3.5 bg-muted/40 rounded w-1/2 animate-pulse" />
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {comments.length === 0 && !submittingComment ? (
           <div className="text-center py-12 px-4 text-muted-foreground space-y-2">
             <MessageCircle className="w-10 h-10 mx-auto text-muted-foreground/40 stroke-[1.5]" />
             <h3 className="font-bold text-base text-foreground">No replies yet</h3>

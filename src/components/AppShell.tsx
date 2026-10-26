@@ -4,7 +4,8 @@ import {
   MessageCircle,
   User,
   LogOut,
-  BookOpen,
+  ImageIcon,
+  Gamepad2,
   Newspaper,
   Plus,
   Bell,
@@ -18,7 +19,9 @@ import {
   Building2,
   ChevronDown,
   Layers,
+  Sparkles,
 } from "lucide-react";
+import { FlickPostModal } from "./post/FlickPostModal";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenantContext";
 import { WorkspaceSwitcherModal } from "./workspace/WorkspaceSwitcherModal";
@@ -45,10 +48,10 @@ import { initRealtimePushEngine, requestDesktopNotificationPermission } from "@/
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { RightRail } from "./layout/RightRail";
 
-const tabs: { to: string; icon: typeof Home; label: string; center?: boolean }[] = [
+const tabs: { to: string; icon: typeof Home; label: string; center?: boolean; action?: boolean }[] = [
   { to: "/", icon: Home, label: "Home" },
   { to: "/news", icon: Newspaper, label: "News" },
-  { to: "/stories/new", icon: Plus, label: "Flick", center: true },
+  { to: "#post", icon: Plus, label: "Flick", center: true, action: true },
   { to: "/messages", icon: MessageCircle, label: "DMs" },
   { to: "/profile", icon: User, label: "Me" },
 ];
@@ -65,12 +68,23 @@ export function AppShell() {
   const [unread, setUnread] = useState(0);
   const [unreadDMs, setUnreadDMs] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [postModalOpen, setPostModalOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
 
   useHomeCameraSwipe();
 
   useEffect(() => {
     return initOfflineEngine(setIsOnline);
+  }, []);
+
+  useEffect(() => {
+    const handleOpenPost = () => setPostModalOpen(true);
+    window.addEventListener("flick:open-post-modal", handleOpenPost);
+    window.addEventListener("flick:open-composer", handleOpenPost);
+    return () => {
+      window.removeEventListener("flick:open-post-modal", handleOpenPost);
+      window.removeEventListener("flick:open-composer", handleOpenPost);
+    };
   }, []);
 
   // hide top bar when inside chat thread or chat list, and hide dock when in open chat thread
@@ -80,10 +94,10 @@ export function AppShell() {
   // Pages that manage their own viewport height (no extra main padding/max-width)
   const fullBleed = inThread || isChatRoute;
   // Wide desktops get a secondary contextual column on feed-style routes.
-  const showRail = !fullBleed && ["/", "/news", "/challenges", "/comics"].includes(pathname);
+  const showRail = !fullBleed && ["/", "/news", "/challenges", "/wallpapers", "/games"].includes(pathname);
 
   // Top-level tab order for swipe navigation
-  const tabOrder = ["/", "/news", "/stories/new", "/messages", "/profile"];
+  const tabOrder = ["/", "/news", "/messages", "/profile"];
   const currentIdx = tabOrder.findIndex((t) =>
     t === "/" ? pathname === "/" : pathname.startsWith(t),
   );
@@ -311,6 +325,23 @@ export function AppShell() {
         </button>
         <nav className="flex flex-col gap-1">
           {tabs.map((t) => {
+            if (t.action) {
+              return (
+                <button
+                  key={t.label}
+                  type="button"
+                  onClick={() => {
+                    void triggerLightHaptic();
+                    setPostModalOpen(true);
+                  }}
+                  title="What's flickering? (Create Post)"
+                  className="flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition bg-snap text-snap-foreground hover:opacity-95 font-bold shadow-md shadow-snap/20 my-1 group"
+                >
+                  <t.icon className="w-6 h-6 shrink-0 text-snap-foreground group-hover:rotate-90 transition-transform duration-200" />
+                  <span className="hidden xl:inline">Flick</span>
+                </button>
+              );
+            }
             const active = pathname === t.to || (t.to !== "/" && pathname.startsWith(t.to));
             return (
               <Link
@@ -332,19 +363,33 @@ export function AppShell() {
             );
           })}
           <Link
-            to="/comics"
-            title="Comics"
-            className="flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition hover:bg-secondary/60"
+            to="/wallpapers"
+            title="Wallpapers"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
+              pathname.startsWith("/wallpapers") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+            }`}
           >
-            <BookOpen className="w-6 h-6 shrink-0" />
-            <span className="hidden xl:inline">Comics</span>
+            <ImageIcon className="w-6 h-6 shrink-0 text-rose-400" />
+            <span className="hidden xl:inline">Wallpapers</span>
+          </Link>
+          <Link
+            to="/games"
+            title="Flick Games"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
+              pathname.startsWith("/games") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+            }`}
+          >
+            <Gamepad2 className="w-6 h-6 shrink-0 text-amber-400" />
+            <span className="hidden xl:inline">Flick Games</span>
           </Link>
           <Link
             to="/camera"
             title="Camera"
-            className="flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition hover:bg-secondary/60"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
+              pathname.startsWith("/camera") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+            }`}
           >
-            <Plus className="w-6 h-6 shrink-0" />
+            <Camera className="w-6 h-6 shrink-0" />
             <span className="hidden xl:inline">Camera</span>
           </Link>
           <button
@@ -482,14 +527,22 @@ export function AppShell() {
             {tabs.map((t) => {
               const active =
                 pathname === t.to ||
-                (t.to === "/stories/new" && pathname.startsWith("/stories")) ||
-                (t.to !== "/" && t.to !== "/stories/new" && pathname.startsWith(t.to));
-              if (t.center) {
+                (!t.action && t.to !== "/" && pathname.startsWith(t.to));
+              if (t.center || t.action) {
                 return (
-                  <Link key={t.to} to={t.to} className="flex flex-col items-center -mt-7 relative">
+                  <button
+                    key={t.label}
+                    type="button"
+                    onClick={() => {
+                      void triggerLightHaptic();
+                      setPostModalOpen(true);
+                    }}
+                    className="flex flex-col items-center -mt-7 relative group"
+                    title="What's flickering? (Create Post)"
+                  >
                     <motion.div
                       whileTap={{ scale: 0.9 }}
-                      className="w-14 h-14 rounded-full grid place-items-center shadow-[0_0_30px_rgba(180,255,80,0.5)]"
+                      className="w-14 h-14 rounded-full grid place-items-center shadow-[0_0_30px_rgba(180,255,80,0.5)] cursor-pointer"
                       style={{
                         background:
                           "radial-gradient(circle at 30% 30%, oklch(0.95 0.18 130), oklch(0.7 0.22 150))",
@@ -497,10 +550,10 @@ export function AppShell() {
                     >
                       <t.icon className="w-6 h-6 text-snap-foreground" />
                     </motion.div>
-                    <span className="text-[9px] uppercase tracking-wider mt-1 text-foreground/80">
+                    <span className="text-[9px] uppercase tracking-wider mt-1 text-foreground/80 font-bold">
                       {t.label}
                     </span>
-                  </Link>
+                  </button>
                 );
               }
               return (
@@ -550,7 +603,7 @@ export function AppShell() {
         </nav>
       )}
 
-      {/* More sheet — gives mobile access to Camera/Comics/Challenges */}
+      {/* More sheet — gives mobile access to Wallpapers, Flick Games, Camera & More */}
       <AnimatePresence>
         {moreOpen && (
           <motion.div
@@ -573,10 +626,27 @@ export function AppShell() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  setPostModalOpen(true);
+                }}
+                className="w-full flex items-center gap-3 p-3 rounded-2xl bg-snap/10 border border-snap/30 text-left hover:bg-snap/20 transition group"
+              >
+                <span className="w-10 h-10 rounded-full bg-snap text-snap-foreground grid place-items-center group-hover:rotate-90 transition-transform">
+                  <Plus className="w-5 h-5" />
+                </span>
+                <div>
+                  <div className="font-bold text-foreground">What's flickering?</div>
+                  <div className="text-xs text-muted-foreground">Post to the algorithm feed</div>
+                </div>
+              </button>
               {[
+                { to: "/wallpapers", icon: ImageIcon, label: "Wallpapers (Pinterest)" },
+                { to: "/games", icon: Gamepad2, label: "Flick Games (Level Devil)" },
                 { to: "/creator-insights", icon: BarChart3, label: "Creator Insights" },
-                { to: "/camera", icon: Camera, label: "Camera" },
-                { to: "/comics", icon: BookOpen, label: "Library" },
+                { to: "/camera", icon: Camera, label: "Camera & Stories" },
                 { to: "/challenges", icon: Trophy, label: "Challenges" },
               ].map((m) => (
                 <Link
@@ -635,6 +705,7 @@ export function AppShell() {
         isOpen={workspaceModalOpen}
         onClose={() => setWorkspaceModalOpen(false)}
       />
+      <FlickPostModal open={postModalOpen} onClose={() => setPostModalOpen(false)} />
       <GlobalAudioOverlay />
     </div>
   );
