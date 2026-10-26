@@ -25,6 +25,7 @@ import { requestDesktopNotificationPermission } from "@/lib/realtimeNotification
 import { Avatar } from "@/components/Avatar";
 import { dedupe, sectionize, priorityOf, type NotifRow } from "@/lib/notifications/group";
 import { useNotifPrefs, type NotifPrefs } from "@/lib/notifications/prefs";
+import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { toast } from "sonner";
 import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
 
@@ -191,6 +192,9 @@ export function NotificationsInbox({ open, onClose }: { open: boolean; onClose: 
     return dedupe(items).filter((n) => {
       if (archived.has(n.id)) return false;
 
+      // Filter out notification categories turned off in user settings
+      if (!isNotificationCategoryEnabled(n.kind)) return false;
+
       // Filter: Only see notifications from people you follow (unless system, message, or follow alert)
       if (n.actor_id && n.actor_id !== user?.id) {
         if (!["system", "message", "follow"].includes(n.kind)) {
@@ -208,10 +212,10 @@ export function NotificationsInbox({ open, onClose }: { open: boolean; onClose: 
       if (filter === "Messages") return n.kind === "message";
       return true;
     });
-  }, [items, filter, query, archived, user, flickingIds]);
+  }, [items, filter, query, archived, user, flickingIds, prefs]);
 
   const sections = useMemo(() => sectionize(visible), [visible]);
-  const unreadTotal = useMemo(() => items.filter((n) => !n.read_at).length, [items]);
+  const unreadTotal = useMemo(() => visible.filter((n) => !n.read_at).length, [visible]);
 
   const markRead = async (ids: string[]) => {
     if (!ids.length) return;

@@ -106,10 +106,50 @@ export function useAppPrefs() {
 
 /**
  * Returns false if the user toggled off the specific notification category in Settings
+ * or Notification Preferences (including Quiet Hours).
  */
 export function isNotificationCategoryEnabled(kind: string): boolean {
   const p = readAppPrefs();
   const normalized = (kind || "").toLowerCase();
+
+  // 1. Cross-check with notif-prefs and Quiet Hours if set in Notification Center
+  try {
+    const rawNotifPrefs = localStorage.getItem("flick:notif-prefs");
+    if (rawNotifPrefs) {
+      const np = JSON.parse(rawNotifPrefs);
+      if (np?.quietHours) {
+        const h = new Date().getHours();
+        const inQuiet =
+          np.quietFrom <= np.quietTo
+            ? h >= np.quietFrom && h < np.quietTo
+            : h >= np.quietFrom || h < np.quietTo;
+        if (inQuiet) return false;
+      }
+      if (
+        (normalized === "message" || normalized === "chat" || normalized === "dm" || normalized === "typing") &&
+        np?.message === false
+      ) {
+        return false;
+      }
+      if ((normalized === "like" || normalized === "reaction") && np?.like === false) {
+        return false;
+      }
+      if ((normalized === "comment" || normalized === "reply") && np?.comment === false) {
+        return false;
+      }
+      if (normalized === "story" && np?.story === false) {
+        return false;
+      }
+      if (normalized === "post" && np?.post === false) {
+        return false;
+      }
+      if ((normalized === "mention" || normalized === "tag") && np?.mention === false) {
+        return false;
+      }
+    }
+  } catch {}
+
+  // 2. Check main App Settings toggles
   switch (normalized) {
     case "message":
     case "chat":
@@ -127,9 +167,13 @@ export function isNotificationCategoryEnabled(kind: string): boolean {
       return p.notificationsComments;
     case "story":
       return p.notificationsStories;
+    case "tag":
+    case "mention":
+      return p.allowTags;
     case "news":
       return p.newsPopups;
     default:
       return true;
   }
 }
+

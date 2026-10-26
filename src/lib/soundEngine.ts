@@ -54,7 +54,15 @@ class SoundManager {
   }
 
   public isSoundEnabled(): boolean {
-    return this.isEnabled;
+    if (!this.isEnabled) return false;
+    try {
+      const raw = localStorage.getItem("flick:notif-prefs");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.sound === false) return false;
+      }
+    } catch {}
+    return true;
   }
 
   public setSoundEnabled(enabled: boolean): void {

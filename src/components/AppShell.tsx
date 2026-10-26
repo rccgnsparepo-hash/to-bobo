@@ -42,7 +42,8 @@ import { payloadToPath, navigateOnce, type NotifPayload } from "@/lib/native/dee
 import { setGlobalBadge } from "@/lib/notifications/badge";
 import { useLenis } from "@/lib/useLenis";
 import { initRealtimePushEngine, requestDesktopNotificationPermission } from "@/lib/realtimeNotifications";
-const RightRail = lazy(() => import("./layout/RightRail").then((m) => ({ default: m.RightRail })));
+import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
+import { RightRail } from "./layout/RightRail";
 
 const tabs: { to: string; icon: typeof Home; label: string; center?: boolean }[] = [
   { to: "/", icon: Home, label: "Home" },
@@ -125,7 +126,7 @@ export function AppShell() {
         /* noop */
       });
 
-    // 1. Load unread notifications with local read cache filter
+    // 1. Load unread notifications with local read cache filter & user category preferences
     const loadNotifs = async () => {
       let readCache = new Set<string>();
       try {
@@ -133,10 +134,12 @@ export function AppShell() {
       } catch {}
       const { data } = await supabase
         .from("notifications")
-        .select("id")
+        .select("id, kind")
         .eq("user_id", user.id)
         .is("read_at", null);
-      const remainingUnread = (data ?? []).filter((n: { id: string }) => !readCache.has(n.id)).length;
+      const remainingUnread = (data ?? []).filter(
+        (n: { id: string; kind?: string }) => !readCache.has(n.id) && isNotificationCategoryEnabled(n.kind || "")
+      ).length;
       setUnread(remainingUnread);
       setGlobalBadge(remainingUnread);
     };
@@ -161,6 +164,7 @@ export function AppShell() {
     loadDMs();
 
     window.addEventListener("flick:notifications-updated", loadNotifs);
+    window.addEventListener("flick:app-prefs-changed", loadNotifs);
     const onDmUnreadEvent = (e: Event) => {
       const custom = e as CustomEvent<{ total?: number; increment?: number }>;
       if (typeof custom.detail?.total === "number") {
@@ -215,6 +219,7 @@ export function AppShell() {
       cleanupRealtimePush();
       clearInterval(dmInterval);
       window.removeEventListener("flick:notifications-updated", loadNotifs);
+      window.removeEventListener("flick:app-prefs-changed", loadNotifs);
       window.removeEventListener("flick:dm-unread-updated", onDmUnreadEvent);
       window.removeEventListener("focus", loadDMs);
       window.removeEventListener("flick:system-resume", loadDMs);
@@ -460,13 +465,7 @@ export function AppShell() {
       </main>
 
       {/* Optional right rail — only when there is genuine horizontal room */}
-      {showRail && (
-        <Suspense
-          fallback={<aside className="hidden xl:block w-[320px] shrink-0 border-l border-border" />}
-        >
-          <RightRail />
-        </Suspense>
-      )}
+      {showRail && <RightRail />}
 
       {/* Mobile/tablet floating dock */}
       {chrome && (
