@@ -14,25 +14,28 @@ function wallpaperApiProxyPlugin() {
           const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
           const q = (url.searchParams.get("q") || "").trim();
           const category = (url.searchParams.get("category") || "all").trim();
+          const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
           const searchTerm = q || (category !== "all" && category !== "All" ? category : "toplist");
           
-          const results: any[] = [];
+          const rawResults: any[] = [];
           
-          // 1. Query Wallhaven (Real human-curated 4K/8K community wallpapers)
+          // 1. Query Wallhaven (Real human-curated 4K/8K community wallpapers with multi-page support)
           try {
             const isTop = searchTerm === "toplist" || searchTerm === "all";
             const whUrl = isTop
-              ? "https://wallhaven.cc/api/v1/search?sorting=toplist&purity=100"
-              : `https://wallhaven.cc/api/v1/search?q=${encodeURIComponent(searchTerm)}&purity=100&sorting=toplist`;
-            const whRes = await fetch(whUrl);
+              ? `https://wallhaven.cc/api/v1/search?sorting=toplist&purity=100&page=${page}`
+              : `https://wallhaven.cc/api/v1/search?q=${encodeURIComponent(searchTerm)}&purity=100&sorting=toplist&page=${page}`;
+            const whRes = await fetch(whUrl, {
+              headers: { "User-Agent": "FlickCommunityApp/1.0" },
+            });
             if (whRes.ok) {
               const whData = await whRes.json();
               for (const item of (whData.data || []).slice(0, 30)) {
                 const uploader = item.uploader?.username ? `@${item.uploader.username}` : "Wallhaven Artist";
-                const uploaderAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80";
-                results.push({
+                const uploaderAvatar = `https://images.unsplash.com/photo-${1535713875002 + ((item.id?.charCodeAt(0) || 0) % 200)}?w=120&auto=format&fit=crop&q=80`;
+                rawResults.push({
                   id: "wh_" + item.id,
-                  title: item.tags?.map((t: any) => t.name).join(" • ") || `${searchTerm} 4K Wallpaper`,
+                  title: item.tags?.slice(0, 3).map((t: any) => t.name).join(" • ") || `${searchTerm} 4K Wallpaper`,
                   imageUrl: item.path,
                   thumbnailUrl: item.thumbs?.large || item.thumbs?.small || item.path,
                   author: uploader,
@@ -46,7 +49,7 @@ function wallpaperApiProxyPlugin() {
                   resolution: item.resolution || "3840x2160",
                   likes: item.favorites || Math.floor(Math.random() * 450) + 120,
                   views: item.views || Math.floor(Math.random() * 6000) + 1000,
-                  category: searchTerm,
+                  category: category !== "all" && category !== "All" ? category : "Wallhaven Curated",
                   tags: [searchTerm, item.category || "Art", item.resolution || "4K", "Ultra HD 4K"],
                   downloadUrl: item.path,
                   aspectRatio: (item.dimension_y || 2160) > (item.dimension_x || 3840) ? "tall" : "wide",
@@ -57,10 +60,10 @@ function wallpaperApiProxyPlugin() {
             console.error("Wallhaven fetch failed:", whErr);
           }
 
-          // 2. Query WallpaperCave (Real community wallpapers)
+          // 2. Query WallpaperCave (Real community wallpapers with page offset)
           try {
             const wcQuery = searchTerm === "toplist" || searchTerm === "all" ? "4k wallpapers" : searchTerm;
-            const wcUrl = "https://wallpapercave.com/search?q=" + encodeURIComponent(wcQuery);
+            const wcUrl = `https://wallpapercave.com/search?q=${encodeURIComponent(wcQuery)}&page=${page}`;
             const wcRes = await fetch(wcUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
             if (wcRes.ok) {
               const html = await wcRes.text();
@@ -76,8 +79,8 @@ function wallpaperApiProxyPlugin() {
                 const fullUrl = full.startsWith("/") ? "https://wallpapercave.com" + full : full;
                 const uploader = "WallpaperCave Community";
                 const uploaderAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80";
-                results.push({
-                  id: "wc_" + count + "_" + Math.random().toString(36).slice(2, 7),
+                rawResults.push({
+                  id: "wc_p" + page + "_" + count + "_" + Math.random().toString(36).slice(2, 7),
                   title: alt.length > 60 ? alt.slice(0, 60) + "..." : alt,
                   imageUrl: fullUrl,
                   thumbnailUrl: thumb,
@@ -92,7 +95,7 @@ function wallpaperApiProxyPlugin() {
                   resolution: "1920x1080 Full HD",
                   likes: Math.floor(Math.random() * 320) + 70,
                   views: Math.floor(Math.random() * 3500) + 400,
-                  category: searchTerm,
+                  category: category !== "all" && category !== "All" ? category : "WallpaperCave",
                   tags: [searchTerm, "WallpaperCave", "Community Favorite"],
                   downloadUrl: fullUrl,
                   aspectRatio: "wide",
@@ -104,13 +107,25 @@ function wallpaperApiProxyPlugin() {
             console.error("WallpaperCave fetch failed:", wcErr);
           }
 
+          // Strict internal deduplication per page
+          const seenKeys = new Set();
+          const deduped: any[] = [];
+          for (const item of rawResults) {
+            const key = item.imageUrl ? item.imageUrl.split("?")[0].toLowerCase() : item.id;
+            if (!seenKeys.has(key) && !seenKeys.has(item.id)) {
+              seenKeys.add(key);
+              seenKeys.add(item.id);
+              deduped.push(item);
+            }
+          }
+
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Access-Control-Allow-Origin", "*");
-          res.end(JSON.stringify({ wallpapers: results, count: results.length }));
+          res.end(JSON.stringify({ wallpapers: deduped, count: deduped.length, page }));
         } catch (err: any) {
           res.statusCode = 500;
           res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: err.message, wallpapers: [] }));
+          res.end(JSON.stringify({ error: err.message, wallpapers: [], page }));
         }
       });
     },

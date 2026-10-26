@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   Search,
   Download,
@@ -37,11 +37,18 @@ import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
 export default function WallpapersPage() {
   const { user, profile } = useAuth();
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-  const [wallpapers, setWallpapers] = useState<WallpaperPin[]>(CURATED_REAL_WALLPAPERS);
+  const [wallpapers, setWallpapers] = useState<WallpaperPin[]>([]);
+  const [page, setPage] = useState(1);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [savedIds, setSavedIds] = useState<string[]>(() => getSavedWallpaperIds());
   const [activePin, setActivePin] = useState<WallpaperPin | null>(null);
-  const [searching, setSearching] = useState(false);
+
+  // De-duplication registry: strictly guarantees NO repeated wallpapers across infinite scrolls
+  const seenKeysRef = useRef<Set<string>>(new Set());
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Quick suggestion chips matching the uploaded video & real photo search queries
   const SUGGESTED_TAGS = [
@@ -57,6 +64,14 @@ export default function WallpapersPage() {
     "Aesthetic",
   ];
 
+  // Debounce search query to avoid thrashing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   useEffect(() => {
     const handleSavedUpdate = (e: Event) => {
       const ids = (e as CustomEvent).detail;
@@ -66,21 +81,96 @@ export default function WallpapersPage() {
     return () => window.removeEventListener("flick:saved-wallpapers-updated", handleSavedUpdate);
   }, []);
 
-  // Live query real Photo & Wallpaper APIs (WallpaperCave + Wallhaven)
+  // Fetch initial batch (Page 1) when debounced query or selected category changes
   useEffect(() => {
     let active = true;
-    setSearching(true);
-    searchWallpapersFromApi(query, selectedCategory).then((results) => {
-      if (active) {
-        setWallpapers(results);
-        setSearching(false);
+    setLoadingInitial(true);
+    seenKeysRef.current.clear();
+
+    searchWallpapersFromApi(debouncedQuery, selectedCategory, 1).then((results) => {
+      if (!active) return;
+      const initialPins: WallpaperPin[] = [];
+      for (const pin of results) {
+        const urlKey = pin.imageUrl.split("?")[0].toLowerCase();
+        if (!seenKeysRef.current.has(pin.id) && !seenKeysRef.current.has(urlKey)) {
+          seenKeysRef.current.add(pin.id);
+          seenKeysRef.current.add(urlKey);
+          initialPins.push(pin);
+        }
       }
+      setWallpapers(initialPins);
+      setPage(1);
+      setLoadingInitial(false);
     });
 
     return () => {
       active = false;
     };
-  }, [query, selectedCategory]);
+  }, [debouncedQuery, selectedCategory]);
+
+  // Load next page in infinite scroll stream with strict zero-duplication guarantee
+  const loadMoreWallpapers = useCallback(async () => {
+    if (loadingInitial || loadingMore) return;
+    setLoadingMore(true);
+
+    const nextPage = page + 1;
+    try {
+      const results = await searchWallpapersFromApi(debouncedQuery, selectedCategory, nextPage);
+      const newPins: WallpaperPin[] = [];
+      for (const pin of results) {
+        const urlKey = pin.imageUrl.split("?")[0].toLowerCase();
+        if (!seenKeysRef.current.has(pin.id) && !seenKeysRef.current.has(urlKey)) {
+          seenKeysRef.current.add(pin.id);
+          seenKeysRef.current.add(urlKey);
+          newPins.push(pin);
+        }
+      }
+
+      if (newPins.length > 0) {
+        setWallpapers((prev) => [...prev, ...newPins]);
+      }
+      setPage(nextPage);
+    } catch (err) {
+      console.error("Failed to stream more wallpapers:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingInitial, loadingMore, page, debouncedQuery, selectedCategory]);
+
+  // IntersectionObserver for unending, automated infinite scrolling
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !loadingInitial && !loadingMore) {
+          void loadMoreWallpapers();
+        }
+      },
+      {
+        rootMargin: "650px 0px", // Pre-fetch 650px ahead so scroll feels completely seamless
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadingInitial, loadingMore, loadMoreWallpapers]);
+
+  // Fallback scroll listener for cross-platform/mobile scroll assurance
+  useEffect(() => {
+    const onScroll = () => {
+      if (loadingInitial || loadingMore) return;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+      if (scrollTop + clientHeight >= scrollHeight - 800) {
+        void loadMoreWallpapers();
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [loadingInitial, loadingMore, loadMoreWallpapers]);
 
   const handleToggleSave = (pin: WallpaperPin, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -191,7 +281,26 @@ export default function WallpapersPage() {
 
       {/* Main Pinterest Masonry Grid */}
       <main className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 pt-5">
-        {wallpapers.length === 0 ? (
+        {loadingInitial && wallpapers.length === 0 ? (
+          <div className="columns-2 sm:columns-3 md:columns-4 gap-3 sm:gap-4 space-y-3 sm:space-y-4">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="break-inside-avoid rounded-2xl sm:rounded-3xl overflow-hidden bg-card/60 border border-border animate-pulse p-3 space-y-3"
+              >
+                <div
+                  className={`w-full bg-secondary/80 rounded-xl ${
+                    idx % 3 === 0 ? "aspect-[9/16]" : idx % 2 === 0 ? "aspect-[16/10]" : "aspect-[4/5]"
+                  }`}
+                />
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-secondary" />
+                  <div className="h-3 w-24 bg-secondary rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : wallpapers.length === 0 ? (
           <div className="text-center py-20 text-muted-foreground space-y-3">
             <ImageIcon className="w-12 h-12 mx-auto text-muted-foreground/40 stroke-[1.5]" />
             <h3 className="font-bold text-lg text-foreground">No wallpapers found</h3>
@@ -207,104 +316,133 @@ export default function WallpapersPage() {
             </button>
           </div>
         ) : (
-          <div className="columns-2 sm:columns-3 md:columns-4 gap-3 sm:gap-4 [column-fill:_balance] space-y-3 sm:space-y-4">
-            {wallpapers.map((pin) => {
-              const isSaved = savedIds.includes(pin.id);
-              const heightClass =
-                pin.aspectRatio === "tall"
-                  ? "aspect-[9/16]"
-                  : pin.aspectRatio === "wide"
-                    ? "aspect-[16/10]"
-                    : "aspect-[4/5]";
+          <>
+            <div className="columns-2 sm:columns-3 md:columns-4 gap-3 sm:gap-4 [column-fill:_balance] space-y-3 sm:space-y-4">
+              {wallpapers.map((pin) => {
+                const isSaved = savedIds.includes(pin.id);
+                const heightClass =
+                  pin.aspectRatio === "tall"
+                    ? "aspect-[9/16]"
+                    : pin.aspectRatio === "wide"
+                      ? "aspect-[16/10]"
+                      : "aspect-[4/5]";
 
-              return (
-                <motion.div
-                  key={pin.id}
-                  layout
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25 }}
-                  onClick={() => setActivePin(pin)}
-                  className="break-inside-avoid group relative rounded-2xl sm:rounded-3xl overflow-hidden bg-card border border-border cursor-pointer shadow-sm hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
-                >
-                  {/* Pin Image */}
-                  <div className={`w-full ${heightClass} relative overflow-hidden bg-zinc-900`}>
-                    <img
-                      src={pin.imageUrl}
-                      alt={pin.title}
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                return (
+                  <motion.div
+                    key={pin.id}
+                    layout
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    onClick={() => setActivePin(pin)}
+                    className="break-inside-avoid group relative rounded-2xl sm:rounded-3xl overflow-hidden bg-card border border-border cursor-pointer shadow-sm hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                  >
+                    {/* Pin Image */}
+                    <div className={`w-full ${heightClass} relative overflow-hidden bg-zinc-900`}>
+                      <img
+                        src={pin.imageUrl}
+                        alt={pin.title}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
 
-                    {/* Dark gradient overlay on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3" />
+                      {/* Dark gradient overlay on hover */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3" />
 
-                    {/* Source & Resolution Pill (Top Left) */}
-                    {pin.source && (
-                      <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
-                        <span className="px-2 py-0.5 rounded-full bg-black/75 backdrop-blur text-[10px] font-bold text-white shadow flex items-center gap-1 border border-white/15">
-                          <span className="w-1.5 h-1.5 rounded-full bg-snap animate-pulse" />
-                          <span>{pin.source}</span>
-                        </span>
-                      </div>
-                    )}
+                      {/* Source & Resolution Pill (Top Left) */}
+                      {pin.source && (
+                        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+                          <span className="px-2 py-0.5 rounded-full bg-black/75 backdrop-blur text-[10px] font-bold text-white shadow flex items-center gap-1 border border-white/15">
+                            <span className="w-1.5 h-1.5 rounded-full bg-snap animate-pulse" />
+                            <span>{pin.source}</span>
+                          </span>
+                        </div>
+                      )}
 
-                    {/* Red Pinterest-Style Save Button (Top Right) */}
-                    <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleSave(pin, e)}
-                        className={`px-3.5 py-1.5 rounded-full font-bold text-xs shadow-lg transition active:scale-90 flex items-center gap-1.5 ${
-                          isSaved
-                            ? "bg-zinc-900 text-white border border-white/20"
-                            : "bg-[#e60023] hover:bg-[#ad081b] text-white"
-                        }`}
-                      >
-                        {isSaved ? "Saved" : "Save"}
-                      </button>
-                    </div>
-
-                    {/* Bottom action pills on hover */}
-                    <div className="absolute bottom-2.5 left-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 flex items-center justify-between">
-                      <div className="text-white text-xs font-bold drop-shadow truncate pr-2">
-                        {pin.title}
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
+                      {/* Red Pinterest-Style Save Button (Top Right) */}
+                      <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
                         <button
                           type="button"
-                          onClick={(e) => handleDownload(pin, e)}
-                          className="w-8 h-8 rounded-full bg-white/90 text-black hover:bg-white flex items-center justify-center shadow transition active:scale-90"
-                          title="Download 4K"
+                          onClick={(e) => handleToggleSave(pin, e)}
+                          className={`px-3.5 py-1.5 rounded-full font-bold text-xs shadow-lg transition active:scale-90 flex items-center gap-1.5 ${
+                            isSaved
+                              ? "bg-zinc-900 text-white border border-white/20"
+                              : "bg-[#e60023] hover:bg-[#ad081b] text-white"
+                          }`}
                         >
-                          <Download className="w-3.5 h-3.5" />
+                          {isSaved ? "Saved" : "Save"}
                         </button>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Pin info footer below card */}
-                  <div className="p-2.5 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Avatar
-                        url={pin.creator?.avatar}
-                        name={pin.creator?.name || "Creator"}
-                        size={22}
-                      />
-                      <span className="font-semibold text-foreground truncate">
-                        {pin.creator?.name || "Community Artist"}
-                      </span>
+                      {/* Bottom action pills on hover */}
+                      <div className="absolute bottom-2.5 left-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 flex items-center justify-between">
+                        <div className="text-white text-xs font-bold drop-shadow truncate pr-2">
+                          {pin.title}
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => handleDownload(pin, e)}
+                            className="w-8 h-8 rounded-full bg-white/90 text-black hover:bg-white flex items-center justify-center shadow transition active:scale-90"
+                            title="Download 4K"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono">
-                      <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
-                      <span>{pin.likes}</span>
+                    {/* Pin info footer below card */}
+                    <div className="p-2.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar
+                          url={pin.creator?.avatar}
+                          name={pin.creator?.name || "Creator"}
+                          size={22}
+                        />
+                        <span className="font-semibold text-foreground truncate">
+                          {pin.creator?.name || "Community Artist"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono">
+                        <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
+                        <span>{pin.likes}</span>
+                      </div>
                     </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* Unending Infinite Scroll Sentinel & Stream Indicator */}
+            <div
+              ref={sentinelRef}
+              className="mt-8 py-10 flex flex-col items-center justify-center min-h-[110px]"
+            >
+              {loadingMore ? (
+                <div className="flex items-center gap-3 px-5 py-2.5 rounded-full bg-secondary/80 border border-border shadow-lg backdrop-blur-md text-xs font-semibold text-foreground animate-pulse">
+                  <div className="w-4 h-4 border-2 border-snap border-t-transparent rounded-full animate-spin" />
+                  <span>Streaming more 4K wallpapers…</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="px-4 py-1.5 rounded-full bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-snap" />
+                    <span>Infinite Scroll Stream • {wallpapers.length} wallpapers loaded • Never repeated</span>
                   </div>
-                </motion.div>
-              );
-            })}
-          </div>
+                  <button
+                    type="button"
+                    onClick={loadMoreWallpapers}
+                    className="text-xs text-muted-foreground/80 hover:text-foreground hover:underline transition pt-1 cursor-pointer"
+                  >
+                    Load next batch manually
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </main>
 
