@@ -164,7 +164,8 @@ export function NotchNotification() {
       setProgress(100);
 
       if (notificationAudio.isVoiceEnabled()) {
-        void notificationAudio.playNotificationAudio(item.kind, item.actor);
+        const headlineOrContent = item.kind === "news" ? (item.message || item.title) : (item.message || item.title);
+        void notificationAudio.playNotificationAudio(item.kind, item.actor, undefined, headlineOrContent);
       }
       if (soundEngine.isSoundEnabled()) {
         playNotificationChime();

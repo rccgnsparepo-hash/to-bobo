@@ -23,7 +23,6 @@ import {
   ArrowLeft,
   Search,
   Slash,
-  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProfileSettings } from "@/components/ProfileSettings";
@@ -302,14 +301,6 @@ export default function ProfilePage() {
         </div>
 
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent("flick:open-security-inspector"))}
-            aria-label="Security & Trust Inspector"
-            title="Security & Trust Inspector"
-            className="w-9 h-9 rounded-full hover:bg-secondary grid place-items-center transition text-emerald-400 hover:text-emerald-300"
-          >
-            <Shield className="w-4 h-4" />
-          </button>
           <button
             onClick={shareProfile}
             aria-label="Share profile"

@@ -297,11 +297,91 @@ const activePermits = new Map<
 >();
 
 // -------------------------------------------------------------
+// IP & Network Safeguards (IPv4 & IPv6 Normalization)
+// -------------------------------------------------------------
+export function normalizeIp(rawIp: string): string {
+  let ip = (rawIp || "127.0.0.1").trim().toLowerCase();
+  // Strip IPv4-mapped IPv6 (e.g. ::ffff:192.168.1.1 -> 192.168.1.1)
+  if (ip.startsWith("::ffff:")) {
+    ip = ip.replace("::ffff:", "");
+  }
+  // Group IPv6 addresses by /64 routing subnet to prevent evasion while avoiding ISP-wide bans
+  if (ip.includes(":")) {
+    const segments = ip.split(":");
+    return segments.slice(0, 4).join(":") + "::/64";
+  }
+  return ip;
+}
+
+// Configurable Policy Engine (with documented 7-day retention)
+export interface SecurityPolicyConfig {
+  maxIpAttemptsPer30Min: number;
+  maxIpSuccessfulPer24Hours: number;
+  baseCooldownMinutes: number;
+  progressiveCooldownMultiplier: number;
+  retentionWindowMs: number;
+}
+
+export const SECURITY_POLICY: SecurityPolicyConfig = {
+  maxIpAttemptsPer30Min: 3, // Testing baseline: max 3 attempts / 30m
+  maxIpSuccessfulPer24Hours: 5, // Testing baseline: max 5 successes / 24h
+  baseCooldownMinutes: 15,
+  progressiveCooldownMultiplier: 2,
+  retentionWindowMs: 7 * 24 * 60 * 60 * 1000, // 7 days retention policy
+};
+
+// Device Trust Records (Privacy-Conscious First-Party Continuity)
+export interface DeviceTrustRecord {
+  deviceHash: string;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  registeredAccounts: string[];
+  failedVerificationAttempts: number;
+  cooldownExpiresAt?: number;
+  trustTier: "trusted" | "standard" | "suspicious" | "restricted";
+}
+
+const deviceTrustStore: Record<string, DeviceTrustRecord> = {};
+const ipCooldownStore: Record<string, { blockedUntil: number; strikes: number }> = {};
+
+export function reassessDeviceTrust(deviceHash: string, reason: string): DeviceTrustRecord {
+  const record = deviceTrustStore[deviceHash] || {
+    deviceHash,
+    firstSeenAt: Date.now(),
+    lastSeenAt: Date.now(),
+    registeredAccounts: [],
+    failedVerificationAttempts: 0,
+    trustTier: "standard",
+  };
+  record.lastSeenAt = Date.now();
+  if (reason === "account_suspended") {
+    record.trustTier = "restricted";
+    record.cooldownExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
+  } else if (reason === "appeal_approved") {
+    record.trustTier = "standard";
+    record.cooldownExpiresAt = undefined;
+  }
+  deviceTrustStore[deviceHash] = record;
+  return record;
+}
+
+// Prune expired records per retention policy
+function pruneExpiredSecurityRecords() {
+  const cutoff = Date.now() - SECURITY_POLICY.retentionWindowMs;
+  for (const ip of Object.keys(registry.ipHistory)) {
+    registry.ipHistory[ip] = registry.ipHistory[ip].filter((e) => e.timestamp > cutoff);
+    if (registry.ipHistory[ip].length === 0) delete registry.ipHistory[ip];
+  }
+}
+
+// -------------------------------------------------------------
 // Core Multi-Layer Risk Evaluation Engine
 // -------------------------------------------------------------
 export function evaluateRegistrationAttempt(signals: IdentitySignals): SecurityEvaluationResult {
+  pruneExpiredSecurityRecords();
   const now = Date.now();
-  const clientIp = signals.ip || "127.0.0.1";
+  const rawClientIp = signals.ip || "127.0.0.1";
+  const clientIp = normalizeIp(rawClientIp);
   const { canonical: canonicalEmail, isAliased } = canonicalizeEmail(signals.email);
   const emailDomain = signals.email.split("@")[1]?.toLowerCase() || "";
   const deviceHash = generateDeviceHash(signals);
@@ -309,49 +389,81 @@ export function evaluateRegistrationAttempt(signals: IdentitySignals): SecurityE
   let riskScore = 5; // Baseline low risk
   const reasons: string[] = [];
 
-  // --- Layer 1: Network Reputation & IP Velocity ---
+  // --- Layer 1: Network Reputation & IP Velocity (Configurable Rate Limits) ---
   const ipAttempts = registry.ipHistory[clientIp] || [];
-  const recent10m = ipAttempts.filter((a) => now - a.timestamp < 10 * 60 * 1000);
-  const recent1h = ipAttempts.filter((a) => now - a.timestamp < 60 * 60 * 1000);
+  const recent30m = ipAttempts.filter((a) => now - a.timestamp < 30 * 60 * 1000);
   const recent24h = ipAttempts.filter((a) => now - a.timestamp < 24 * 60 * 60 * 1000);
+  const successful24h = recent24h.filter((a) => a.outcome === "success" || a.outcome === "registered");
 
-  if (recent10m.length >= 2) {
-    riskScore += 25;
-    reasons.push(`Rapid registration velocity from IP (${recent10m.length} in 10 mins)`);
-  } else if (recent1h.length >= 4) {
-    riskScore += 35;
-    reasons.push(`Elevated hourly IP volume (${recent1h.length} in 1 hr)`);
-  } else if (recent24h.length >= 8) {
-    riskScore += 50;
-    reasons.push(`High 24h registration threshold reached for IP (${recent24h.length} accounts)`);
+  // Check existing IP cooldown
+  const ipCooldown = ipCooldownStore[clientIp];
+  if (ipCooldown && ipCooldown.blockedUntil > now) {
+    const minsLeft = Math.ceil((ipCooldown.blockedUntil - now) / 60000);
+    riskScore += 60;
+    reasons.push(`IP in progressive cooldown (${minsLeft}m remaining) due to rapid repeated attempts`);
   }
 
-  // --- Layer 2: Device Continuity & Multi-Account Spanning ---
+  // 1. Max 3 attempts in 30 minutes
+  if (recent30m.length >= SECURITY_POLICY.maxIpAttemptsPer30Min) {
+    riskScore += 40;
+    reasons.push(
+      `IP rate limit: ${recent30m.length} registration attempts within 30 minutes (limit: ${SECURITY_POLICY.maxIpAttemptsPer30Min})`
+    );
+    // Apply progressive cooldown on repeated rate violations
+    const strikes = (ipCooldown?.strikes || 0) + 1;
+    const cooldownMins = SECURITY_POLICY.baseCooldownMinutes * Math.pow(SECURITY_POLICY.progressiveCooldownMultiplier, strikes - 1);
+    ipCooldownStore[clientIp] = { blockedUntil: now + cooldownMins * 60000, strikes };
+  }
+
+  // 2. Max 5 successful registrations per 24 hours
+  if (successful24h.length >= SECURITY_POLICY.maxIpSuccessfulPer24Hours) {
+    riskScore += 45;
+    reasons.push(
+      `IP volume threshold: ${successful24h.length} accounts created in 24 hours (threshold: ${SECURITY_POLICY.maxIpSuccessfulPer24Hours}). Additional verification required.`
+    );
+  }
+
+  // --- Layer 2: Privacy-Conscious Device Continuity ---
+  const deviceRecord = deviceTrustStore[deviceHash] || {
+    deviceHash,
+    firstSeenAt: now,
+    lastSeenAt: now,
+    registeredAccounts: [],
+    failedVerificationAttempts: 0,
+    trustTier: "standard",
+  };
+  deviceRecord.lastSeenAt = now;
+  deviceTrustStore[deviceHash] = deviceRecord;
+
   const deviceAccounts = registry.deviceHistory[deviceHash] || [];
   const recentDeviceCreations = deviceAccounts.filter((a) => now - a.timestamp < 24 * 60 * 60 * 1000);
   const deviceAccountCount = deviceAccounts.length;
 
-  if (deviceAccountCount === 1) {
-    riskScore += 10;
-    reasons.push("Second account detected on existing device fingerprint");
-  } else if (deviceAccountCount === 2) {
-    riskScore += 30;
-    reasons.push(`Third account attempt from this device signature (${deviceAccountCount} exist)`);
-  } else if (deviceAccountCount >= 3) {
-    // This directly catches the 12-account problem!
-    const multiplier = Math.min(50, deviceAccountCount * 15);
-    riskScore += multiplier;
-    reasons.push(`Excessive account generation on same device (${deviceAccountCount} accounts recorded)`);
+  if (deviceRecord.cooldownExpiresAt && deviceRecord.cooldownExpiresAt > now) {
+    riskScore += 70;
+    reasons.push("Device temporarily restricted due to confirmed abuse pattern");
   }
 
-  // Check rapid creation velocity on device (< 120 seconds between account creations)
+  if (deviceAccountCount === 1) {
+    riskScore += 10;
+    reasons.push("Second account attempt on existing device");
+  } else if (deviceAccountCount === 2) {
+    riskScore += 30;
+    reasons.push(`Third account attempt from this device (${deviceAccountCount} exist)`);
+  } else if (deviceAccountCount >= 3) {
+    const multiplier = Math.min(55, deviceAccountCount * 15);
+    riskScore += multiplier;
+    reasons.push(`Repeated account generation on device (${deviceAccountCount} accounts recorded)`);
+  }
+
+  // Rapid account creation on device (< 120 seconds)
   let rapidCreationDetected = false;
   if (recentDeviceCreations.length > 0) {
     const lastCreationTime = recentDeviceCreations[recentDeviceCreations.length - 1].timestamp;
     if (now - lastCreationTime < 120 * 1000) {
       rapidCreationDetected = true;
       riskScore += 40;
-      reasons.push("Suspiciously rapid sequential account creation (<2 mins since last registration)");
+      reasons.push("Suspiciously rapid sequential registration (<2 mins since last account)");
     }
   }
 

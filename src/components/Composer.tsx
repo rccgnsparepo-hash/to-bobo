@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ImagePlus, X, Mic, Video, Music, Link2, Sparkles, Loader2, Smile } from "lucide-react";
 import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,8 +17,16 @@ import {
 import { MicPermissionModal } from "@/components/chat/MicPermissionModal";
 import { detectSocialUrl, resolveSocialEmbed, type SocialEmbed } from "@/lib/socialEmbeds";
 import { SocialEmbedCard } from "@/components/social/SocialEmbedCard";
+import { motion } from "framer-motion";
 import { AutocorrectBar } from "@/components/common/AutocorrectBar";
 import { applyInlineAutocorrect } from "@/lib/autocorrect";
+import { isUserVerified } from "@/lib/verification";
+import {
+  checkDailyPostLimit,
+  getDailyPostLimit,
+  recordPostCreation,
+  getCachedTodayCount,
+} from "@/lib/dailyPostLimits";
 
 export function Composer({ onPosted }: { onPosted: () => void }) {
   const { user, profile } = useAuth();
@@ -39,6 +47,30 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
   const audRef = useRef<HTMLInputElement>(null);
+
+  // Daily post limits: 12 for verified, 9 for unverified
+  const isVerified = Boolean(
+    isUserVerified(user?.id) || profile?.is_verified || (profile as unknown as { verified?: boolean })?.verified
+  );
+  const dailyLimit = getDailyPostLimit(isVerified);
+  const [todayPostCount, setTodayPostCount] = useState<number>(() =>
+    user ? getCachedTodayCount(user.id) : 0
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    void checkDailyPostLimit(user.id, isVerified).then((res) => {
+      setTodayPostCount(res.count);
+    });
+
+    const onLimitUpdate = () => {
+      setTodayPostCount(getCachedTodayCount(user.id));
+    };
+    window.addEventListener("flick:daily-limit-updated", onLimitUpdate);
+    return () => window.removeEventListener("flick:daily-limit-updated", onLimitUpdate);
+  }, [user, isVerified]);
+
+  const remainingFlicks = Math.max(0, dailyLimit - todayPostCount);
 
   const checkTextForEmbed = async (val: string, skipAutocorrect = false) => {
     let finalVal = val;
@@ -160,7 +192,17 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
   };
 
   const submit = async () => {
-    if (!user || (!text.trim() && !file)) return;
+    if (!user || (!text.trim() && !file && !embed)) return;
+
+    if (remainingFlicks <= 0) {
+      toast.error(
+        `Daily flick limit reached (${dailyLimit}/day). ${
+          isVerified ? "Limit resets at midnight." : "Get Verified to unlock 12 flicks daily!"
+        }`
+      );
+      return;
+    }
+
     setBusy(true);
     const upStage: UploadStage = {
       label: file ? `Uploading ${file.name}` : "Preparing",
@@ -237,6 +279,8 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
         url: profile?.handle ? `/u/${profile.handle}` : "/",
       });
       toast.success("Flick posted");
+      recordPostCreation(user.id);
+      setTodayPostCount((prev) => prev + 1);
       setTimeout(() => setStages([]), 1800);
       setText("");
       setFile(null);
@@ -262,6 +306,58 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
     <div data-coach="coach-composer" className="border-b border-border p-4 flex gap-3">
       <Avatar url={profile?.avatar_url} name={profile?.display_name} size={44} />
       <div className="flex-1">
+        {/* Daily Post Limit & Countdown Animated Progress Bar */}
+        <div className="mb-3 px-3.5 py-2.5 rounded-2xl bg-secondary/50 border border-border/70">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+              <Sparkles className="w-3.5 h-3.5 text-snap shrink-0" />
+              <span>{remainingFlicks} of {dailyLimit} flicks remaining today</span>
+              {isVerified ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-snap/20 text-snap font-extrabold tracking-wide">
+                  VERIFIED 12/DAY ✦
+                </span>
+              ) : (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
+                  Standard 9/day
+                </span>
+              )}
+            </div>
+            <span
+              className={`text-[11px] font-mono font-bold ${
+                remainingFlicks === 0
+                  ? "text-rose-400"
+                  : remainingFlicks <= 2
+                  ? "text-amber-400"
+                  : "text-snap"
+              }`}
+            >
+              {remainingFlicks === 0 ? "Limit Reached" : `${remainingFlicks} left`}
+            </span>
+          </div>
+          {/* Animated Progress Bar */}
+          <div className="w-full h-2 bg-background/80 rounded-full overflow-hidden p-0.5 border border-border/50">
+            <motion.div
+              initial={false}
+              animate={{
+                width: `${Math.min(100, Math.max(4, (todayPostCount / dailyLimit) * 100))}%`,
+              }}
+              transition={{ type: "spring", stiffness: 180, damping: 22 }}
+              className={`h-full rounded-full transition-colors ${
+                remainingFlicks === 0
+                  ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"
+                  : remainingFlicks <= 2
+                  ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
+                  : "bg-snap shadow-[0_0_8px_rgba(180,255,80,0.6)]"
+              }`}
+            />
+          </div>
+          {remainingFlicks === 0 && (
+            <p className="text-[11px] text-rose-400 mt-2 font-medium">
+              You've hit your daily limit of {dailyLimit} flicks. {isVerified ? "Limit resets at midnight." : "Get Flick Verified to unlock 12 daily posts!"}
+            </p>
+          )}
+        </div>
+
         <textarea
           value={text}
           onChange={(e) => checkTextForEmbed(e.target.value.slice(0, 500))}
@@ -430,9 +526,9 @@ export function Composer({ onPosted }: { onPosted: () => void }) {
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">{500 - text.length}</span>
             <button
-              disabled={busy || (!text.trim() && !file && !embed)}
+              disabled={busy || (!text.trim() && !file && !embed) || remainingFlicks <= 0}
               onClick={submit}
-              className="px-5 py-2 rounded-full bg-primary text-primary-foreground font-bold disabled:opacity-50 transition hover:brightness-110 shadow-sm"
+              className="px-5 py-2 rounded-full bg-primary text-primary-foreground font-bold disabled:opacity-50 transition hover:brightness-110 shadow-sm cursor-pointer"
             >
               Flick
             </button>

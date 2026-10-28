@@ -74,9 +74,11 @@ class NotificationAudioEngine {
   }
 
   /**
-   * Formats the natural spoken phrase including dynamic caller ID before notification action
+   * Formats the natural spoken phrase including dynamic caller ID before notification action.
+   * For news: speaks ONLY the headline/header summary.
+   * For intra-news/posts: reads "caller posted: [caption or meme text summary]".
    */
-  public getAnnouncementPhrase(kind: NotificationKind, callerName: string): string {
+  public getAnnouncementPhrase(kind: NotificationKind, callerName: string, contentSummary?: string): string {
     switch (kind) {
       case "message":
         return `${callerName} just sent you a chat`;
@@ -87,11 +89,21 @@ class NotificationAudioEngine {
       case "story":
         return `${callerName} posted a story`;
       case "post":
+        if (contentSummary && contentSummary.trim()) {
+          const clean = contentSummary.trim().replace(/^(Posted a flick|Published):?\s*/i, "");
+          const truncated = clean.length > 140 ? clean.slice(0, 137) + "..." : clean;
+          return `${callerName} posted: ${truncated}`;
+        }
         return `${callerName} just flicked`;
       case "news":
-        return `Flick News Wire: ${callerName}`;
+        // Speaks ONLY the header / headline summary of the news
+        if (contentSummary && contentSummary.trim()) {
+          const clean = contentSummary.trim();
+          return clean.length > 160 ? clean.slice(0, 157) + "..." : clean;
+        }
+        return callerName !== "News Wire" ? callerName : "Latest breaking headline";
       default:
-        return `New notification from ${callerName}`;
+        return contentSummary || `New notification from ${callerName}`;
     }
   }
 
@@ -200,10 +212,11 @@ class NotificationAudioEngine {
   public async playNotificationAudio(
     kind: NotificationKind,
     actor?: CallerInfo,
-    customSoundUrl?: string
+    customSoundUrl?: string,
+    contentSummary?: string
   ): Promise<void> {
     const callerName = this.getCallerIdentifier(actor);
-    const phrase = this.getAnnouncementPhrase(kind, callerName);
+    const phrase = this.getAnnouncementPhrase(kind, callerName, contentSummary);
 
     // 1. Play custom audio file or synthesized chime ONLY if sound effect is enabled
     if (soundEngine.isSoundEnabled()) {

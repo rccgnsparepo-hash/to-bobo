@@ -32,7 +32,6 @@ import {
 } from "@/lib/securityService";
 import { SecurityChallengeModal } from "@/components/security/SecurityChallengeModal";
 import { SecurityBlockModal } from "@/components/security/SecurityBlockModal";
-import { SecurityInspectorModal } from "@/components/security/SecurityInspectorModal";
 
 type FeedbackState = {
   type: "error" | "success" | "warning" | "info";
@@ -72,7 +71,6 @@ export default function AuthPage() {
   const [resetBusy, setResetBusy] = useState(false);
   const [showSecurityChallenge, setShowSecurityChallenge] = useState(false);
   const [showSecurityBlock, setShowSecurityBlock] = useState(false);
-  const [showSecurityInspector, setShowSecurityInspector] = useState(false);
   const [latestEvaluation, setLatestEvaluation] = useState<SecurityEvaluation | null>(null);
 
   // Recovery state for resetting password
@@ -904,17 +902,6 @@ export default function AuthPage() {
                     : "New to Flick? Create an account →"}
                 </button>
               </div>
-
-              <div className="pt-4 border-t border-border/60 flex items-center justify-center">
-                <button
-                  type="button"
-                  onClick={() => setShowSecurityInspector(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/60 hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition cursor-pointer"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Flick Abuse Shields & Security Inspector</span>
-                </button>
-              </div>
             </>
           )}
         </div>
@@ -1052,18 +1039,8 @@ export default function AuthPage() {
           evaluation={latestEvaluation}
           email={email.trim()}
           onClose={() => setShowSecurityBlock(false)}
-          onOpenInspector={() => {
-            setShowSecurityBlock(false);
-            setShowSecurityInspector(true);
-          }}
         />
       )}
-
-      {/* Interactive Security Inspector Modal */}
-      <SecurityInspectorModal
-        isOpen={showSecurityInspector}
-        onClose={() => setShowSecurityInspector(false)}
-      />
     </main>
   );
 }

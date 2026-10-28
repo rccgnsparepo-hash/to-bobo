@@ -13,6 +13,7 @@ import ThreadPage from "@/pages/Thread";
 import ProfilePage from "@/pages/Profile";
 import StoryComposerPage from "@/pages/StoryComposer";
 import ChallengesPage from "@/pages/Challenges";
+import FashionPage from "@/pages/Fashion";
 import WallpapersPage from "@/pages/Wallpapers";
 import FlickGamesPage from "@/pages/FlickGames";
 import AuthPage from "@/pages/Auth";
@@ -187,10 +188,18 @@ function AnimatedRoutes() {
             }
           />
           <Route
+            path="/fashion"
+            element={
+              <PageTransition>
+                <FashionPage />
+              </PageTransition>
+            }
+          />
+          <Route
             path="/wallpapers"
             element={
               <PageTransition>
-                <WallpapersPage />
+                <FashionPage />
               </PageTransition>
             }
           />

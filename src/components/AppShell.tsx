@@ -47,8 +47,6 @@ import { useLenis } from "@/lib/useLenis";
 import { initRealtimePushEngine, requestDesktopNotificationPermission } from "@/lib/realtimeNotifications";
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { RightRail } from "./layout/RightRail";
-import { SecurityStatusBanner } from "./security/SecurityStatusBanner";
-import { SecurityInspectorModal } from "./security/SecurityInspectorModal";
 
 const tabs: { to: string; icon: typeof Home; label: string; center?: boolean; action?: boolean }[] = [
   { to: "/", icon: Home, label: "Home" },
@@ -71,16 +69,9 @@ export function AppShell() {
   const [unreadDMs, setUnreadDMs] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
   const [postModalOpen, setPostModalOpen] = useState(false);
-  const [securityInspectorOpen, setSecurityInspectorOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
 
   useHomeCameraSwipe();
-
-  useEffect(() => {
-    const handleOpenInspector = () => setSecurityInspectorOpen(true);
-    window.addEventListener("flick:open-security-inspector", handleOpenInspector);
-    return () => window.removeEventListener("flick:open-security-inspector", handleOpenInspector);
-  }, []);
 
   useEffect(() => {
     return initOfflineEngine(setIsOnline);
@@ -103,7 +94,7 @@ export function AppShell() {
   // Pages that manage their own viewport height (no extra main padding/max-width)
   const fullBleed = inThread || isChatRoute;
   // Wide desktops get a secondary contextual column on feed-style routes.
-  const showRail = !fullBleed && ["/", "/news", "/challenges", "/wallpapers", "/games"].includes(pathname);
+  const showRail = !fullBleed && ["/", "/news", "/challenges", "/wallpapers", "/fashion", "/games"].includes(pathname);
 
   // Top-level tab order for swipe navigation
   const tabOrder = ["/", "/news", "/messages", "/profile"];
@@ -372,14 +363,16 @@ export function AppShell() {
             );
           })}
           <Link
-            to="/wallpapers"
-            title="Wallpapers"
+            to="/fashion"
+            title="Flick Fashion & Styles"
             className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
-              pathname.startsWith("/wallpapers") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+              pathname.startsWith("/fashion") || pathname.startsWith("/wallpapers")
+                ? "bg-secondary font-semibold"
+                : "hover:bg-secondary/60"
             }`}
           >
-            <ImageIcon className="w-6 h-6 shrink-0 text-rose-400" />
-            <span className="hidden xl:inline">Wallpapers</span>
+            <Sparkles className="w-6 h-6 shrink-0 text-rose-400" />
+            <span className="hidden xl:inline">Fashion</span>
           </Link>
           <Link
             to="/games"
@@ -484,7 +477,6 @@ export function AppShell() {
             </div>
           </div>
         )}
-        <SecurityStatusBanner onOpenInspector={() => setSecurityInspectorOpen(true)} />
         <AnimatePresence mode="wait">
           <motion.div
             key={pathname}
@@ -653,7 +645,7 @@ export function AppShell() {
                 </div>
               </button>
               {[
-                { to: "/wallpapers", icon: ImageIcon, label: "Wallpapers (Pinterest)" },
+                { to: "/fashion", icon: Sparkles, label: "Flick Fashion & Styles" },
                 { to: "/games", icon: Gamepad2, label: "Flick Games (Level Devil)" },
                 { to: "/creator-insights", icon: BarChart3, label: "Creator Insights" },
                 { to: "/camera", icon: Camera, label: "Camera & Stories" },
@@ -717,10 +709,6 @@ export function AppShell() {
       />
       <FlickPostModal open={postModalOpen} onClose={() => setPostModalOpen(false)} />
       <GlobalAudioOverlay />
-      <SecurityInspectorModal
-        isOpen={securityInspectorOpen}
-        onClose={() => setSecurityInspectorOpen(false)}
-      />
     </div>
   );
 }

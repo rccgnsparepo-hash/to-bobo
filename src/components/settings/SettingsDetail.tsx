@@ -726,10 +726,10 @@ export function SettingsDetail({
                   <div>
                     <div className="text-sm font-semibold flex items-center gap-2">
                       <Volume2 className="w-4 h-4 text-snap" />
-                      <span>Caller Voice Announcements</span>
+                      <span>Voice Readouts & Spoken Notifications</span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      Speaks sender ID before notification sound (e.g. &ldquo;Ryder just sent you a chat&rdquo;)
+                      Speaks news headlines and creator flick updates (e.g. &ldquo;Jessy Jay posted: [flick summary]&rdquo;). You can toggle this off anytime.
                     </div>
                   </div>
                   <input
@@ -739,7 +739,7 @@ export function SettingsDetail({
                       setVoiceEnabled(e.target.checked);
                       notificationAudio.setVoiceEnabled(e.target.checked);
                       toast.success(
-                        e.target.checked ? "Voice announcements enabled" : "Voice announcements muted"
+                        e.target.checked ? "Voice readouts enabled" : "Voice readouts muted"
                       );
                     }}
                     className="w-5 h-5 accent-[hsl(var(--snap))] rounded cursor-pointer"

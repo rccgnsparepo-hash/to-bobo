@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Search, MessageSquare, Camera, Film, Mic, Check, CheckCheck, Send } from "lucide-react";
+import { Search, MessageSquare, Camera, Film, Mic, Check, CheckCheck, Send, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { triggerMediumHaptic } from "@/lib/haptics";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Avatar } from "@/components/Avatar";
@@ -37,6 +40,42 @@ export default function MessagesPage() {
   const { pathname } = useLocation();
   const showList = pathname === "/messages";
   const { isUserOnline } = useOnlinePresence();
+
+  // Persisted list of deleted thread IDs
+  const [deletedIds, setDeletedIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("flick:deleted_chat_threads") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const handleDeleteThread = async (partnerId: string, partnerName: string) => {
+    void triggerMediumHaptic();
+    setDeletedIds((prev) => {
+      const next = Array.from(new Set([...prev, partnerId]));
+      try {
+        localStorage.setItem("flick:deleted_chat_threads", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    toast.success(`Chat with ${partnerName} deleted`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          setDeletedIds((prev) => {
+            const next = prev.filter((id) => id !== partnerId);
+            try {
+              localStorage.setItem("flick:deleted_chat_threads", JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+          toast("Chat restored");
+        },
+      },
+    });
+  };
 
   // Load contacts and conversations ordered by latest message
   const loadConversations = async () => {
@@ -207,12 +246,14 @@ export default function MessagesPage() {
     });
   }, [people, metaMap, draftsMap]);
 
-  const filtered = sortedPeople.filter(
-    (p) =>
-      !q.trim() ||
-      p.handle.toLowerCase().includes(q.toLowerCase()) ||
-      p.display_name.toLowerCase().includes(q.toLowerCase())
-  );
+  const filtered = sortedPeople
+    .filter((p) => !deletedIds.includes(p.id))
+    .filter(
+      (p) =>
+        !q.trim() ||
+        p.handle.toLowerCase().includes(q.toLowerCase()) ||
+        p.display_name.toLowerCase().includes(q.toLowerCase())
+    );
 
   return (
     <div className="grid lg:grid-cols-[340px_minmax(0,1fr)] h-full min-w-0 overflow-hidden bg-background">
@@ -243,201 +284,235 @@ export default function MessagesPage() {
           </div>
         </header>
 
-        <ul className="divide-y divide-border/40">
-          {filtered.map((p) => {
-            const meta = metaMap[p.id];
-            const hasUnread = Boolean(meta?.unreadCount && meta.unreadCount > 0);
-            const isTyping = Boolean(typingMap[p.id]);
-            const isOnline = isUserOnline(p.id);
+        <ul className="divide-y divide-border/40 overflow-hidden">
+          <AnimatePresence initial={false}>
+            {filtered.map((p) => {
+              const meta = metaMap[p.id];
+              const hasUnread = Boolean(meta?.unreadCount && meta.unreadCount > 0);
+              const isTyping = Boolean(typingMap[p.id]);
+              const isOnline = isUserOnline(p.id);
 
-            // Determine Flick status icon and color
-            const getFlickStatus = () => {
-              if (isTyping) {
-                return {
-                  text: "is typing…",
-                  color: "text-snap font-bold",
-                  icon: (
-                    <span className="flex gap-0.5 mr-1">
-                      <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                    </span>
-                  ),
-                };
-              }
-
-              // Check if an unsent draft exists for this conversation
-              const draft = draftsMap[p.id];
-              if (draft && (draft.text || draft.hasVn)) {
-                return {
-                  text: draft.hasVn
-                    ? `Draft: 🎙️ Voice note (${draft.vnDuration || 0}s)`
-                    : `Draft: ${draft.text}`,
-                  color: "text-amber-400 font-semibold",
-                  icon: (
-                    <span className="w-2 h-2 rounded-full bg-amber-400 mr-1.5 shrink-0 shadow-sm shadow-amber-400/50" />
-                  ),
-                };
-              }
-
-              if (hasUnread) {
-                if (meta.mediaType === "image") {
+              // Determine Flick status icon and color
+              const getFlickStatus = () => {
+                if (isTyping) {
                   return {
-                    text: "New Flick 📸",
+                    text: "is typing…",
                     color: "text-snap font-bold",
-                    icon: <div className="w-3.5 h-3.5 rounded bg-snap mr-1.5 shadow-sm shadow-snap/30" />,
-                  };
-                }
-                if (meta.mediaType === "video") {
-                  return {
-                    text: "New Flick 🎥",
-                    color: "text-snap font-bold",
-                    icon: <div className="w-3.5 h-3.5 rounded bg-snap mr-1.5 shadow-sm shadow-snap/30" />,
-                  };
-                }
-                if (meta.mediaType === "audio") {
-                  return {
-                    text: "New Voice Note",
-                    color: "text-amber-400 font-bold",
-                    icon: <Mic className="w-3.5 h-3.5 text-amber-400 fill-amber-400 mr-1" />,
-                  };
-                }
-                return {
-                  text: "New Flick",
-                  color: "text-snap font-bold",
-                  icon: <div className="w-3.5 h-3.5 rounded bg-snap mr-1.5 shadow-sm shadow-snap/30" />,
-                };
-              }
-
-              // Delivered or Opened states
-              if (meta?.isMine) {
-                return {
-                  text: meta.isRead ? "Opened" : "Delivered",
-                  color: "text-muted-foreground",
-                  icon: meta.isRead ? (
-                    <div className="w-3.5 h-3.5 rounded border-2 border-rose-500 mr-1.5 shrink-0" />
-                  ) : (
-                    <Send className="w-3 h-3 text-muted-foreground mr-1 shrink-0" />
-                  ),
-                };
-              }
-
-              if (meta && !meta.isMine && meta.isRead) {
-                return {
-                  text: "Received",
-                  color: "text-muted-foreground",
-                  icon: <div className="w-3.5 h-3.5 rounded border border-snap/50 mr-1.5 shrink-0" />,
-                };
-              }
-
-              if (meta?.snippet) {
-                return {
-                  text: meta.snippet,
-                  color: "text-muted-foreground",
-                  icon: <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 mr-1.5 shrink-0" />,
-                };
-              }
-
-              return {
-                text: isOnline ? "Online" : "Offline",
-                color: isOnline ? "text-emerald-400 font-medium" : "text-muted-foreground/60",
-                icon: (
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                      isOnline ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/30"
-                    }`}
-                  />
-                ),
-              };
-            };
-
-            const flickStatus = getFlickStatus();
-
-            return (
-              <li key={p.id}>
-                <div
-                  className={`flex items-center gap-3 px-4 py-3.5 hover:bg-secondary/40 transition group ${
-                    hasUnread ? "bg-snap/5" : ""
-                  }`}
-                >
-                  {/* Avatar with conditional online presence ring */}
-                  <Link
-                    to={`/messages/${p.id}`}
-                    onClick={() => {
-                      setMetaMap((prev) => {
-                        if (!prev[p.id]) return prev;
-                        return { ...prev, [p.id]: { ...prev[p.id], unreadCount: 0 } };
-                      });
-                    }}
-                    className="relative shrink-0"
-                  >
-                    <Avatar url={p.avatar_url} name={p.display_name} size={46} ring={isTyping} />
-                    {/* ONLY display green dot if person is ACTUALLY online */}
-                    {isOnline && (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-background animate-pulse" />
-                    )}
-                  </Link>
-
-                  {/* Conversation partner details & Snapchat-style status line */}
-                  <Link
-                    to={`/messages/${p.id}`}
-                    onClick={() => {
-                      setMetaMap((prev) => {
-                        if (!prev[p.id]) return prev;
-                        return { ...prev, [p.id]: { ...prev[p.id], unreadCount: 0 } };
-                      });
-                    }}
-                    className="min-w-0 flex-1"
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <span
-                        className={`text-sm truncate ${
-                          hasUnread ? "font-bold text-foreground" : "font-semibold text-foreground/90"
-                        }`}
-                      >
-                        {p.display_name}
+                    icon: (
+                      <span className="flex gap-0.5 mr-1">
+                        <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-1.5 h-1.5 bg-snap rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                       </span>
-                      {meta?.lastTime ? (
+                    ),
+                  };
+                }
+
+                // Check if an unsent draft exists for this conversation
+                const draft = draftsMap[p.id];
+                if (draft && (draft.text || draft.hasVn)) {
+                  return {
+                    text: draft.hasVn
+                      ? `Draft: 🎙️ Voice note (${draft.vnDuration || 0}s)`
+                      : `Draft: ${draft.text}`,
+                    color: "text-amber-400 font-semibold",
+                    icon: (
+                      <span className="w-2 h-2 rounded-full bg-amber-400 mr-1.5 shrink-0 shadow-sm shadow-amber-400/50" />
+                    ),
+                  };
+                }
+
+                if (hasUnread) {
+                  if (meta.mediaType === "image") {
+                    return {
+                      text: "New Flick 📸",
+                      color: "text-snap font-bold",
+                      icon: <div className="w-3.5 h-3.5 rounded bg-snap mr-1.5 shadow-sm shadow-snap/30" />,
+                    };
+                  }
+                  if (meta.mediaType === "video") {
+                    return {
+                      text: "New Flick 🎥",
+                      color: "text-snap font-bold",
+                      icon: <div className="w-3.5 h-3.5 rounded bg-snap mr-1.5 shadow-sm shadow-snap/30" />,
+                    };
+                  }
+                  if (meta.mediaType === "audio") {
+                    return {
+                      text: "New Voice Note",
+                      color: "text-amber-400 font-bold",
+                      icon: <Mic className="w-3.5 h-3.5 text-amber-400 fill-amber-400 mr-1" />,
+                    };
+                  }
+                  return {
+                    text: "New Flick",
+                    color: "text-snap font-bold",
+                    icon: <div className="w-3.5 h-3.5 rounded bg-snap mr-1.5 shadow-sm shadow-snap/30" />,
+                  };
+                }
+
+                // Delivered or Opened states
+                if (meta?.isMine) {
+                  return {
+                    text: meta.isRead ? "Opened" : "Delivered",
+                    color: "text-muted-foreground",
+                    icon: meta.isRead ? (
+                      <div className="w-3.5 h-3.5 rounded border-2 border-rose-500 mr-1.5 shrink-0" />
+                    ) : (
+                      <Send className="w-3 h-3 text-muted-foreground mr-1 shrink-0" />
+                    ),
+                  };
+                }
+
+                if (meta && !meta.isMine && meta.isRead) {
+                  return {
+                    text: "Received",
+                    color: "text-muted-foreground",
+                    icon: <div className="w-3.5 h-3.5 rounded border border-snap/50 mr-1.5 shrink-0" />,
+                  };
+                }
+
+                if (meta?.snippet) {
+                  return {
+                    text: meta.snippet,
+                    color: "text-muted-foreground",
+                    icon: <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 mr-1.5 shrink-0" />,
+                  };
+                }
+
+                return {
+                  text: isOnline ? "Online" : "Offline",
+                  color: isOnline ? "text-emerald-400 font-medium" : "text-muted-foreground/60",
+                  icon: (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                        isOnline ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/30"
+                      }`}
+                    />
+                  ),
+                };
+              };
+
+              const flickStatus = getFlickStatus();
+
+              return (
+                <motion.li
+                  key={p.id}
+                  layout
+                  initial={{ opacity: 1, height: "auto" }}
+                  exit={{
+                    opacity: 0,
+                    height: 0,
+                    transition: { duration: 0.28, ease: "easeInOut" },
+                  }}
+                  className="relative overflow-hidden group select-none bg-background"
+                >
+                  {/* Background Delete Button revealed on drag */}
+                  <div className="absolute inset-y-0 right-0 w-28 bg-rose-600 flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteThread(p.id, p.display_name)}
+                      className="w-full h-full flex items-center justify-center gap-1.5 text-white font-bold text-xs hover:bg-rose-700 active:scale-95 transition"
+                      title="Delete chat thread"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+
+                  {/* Swipeable foreground thread item */}
+                  <motion.div
+                    drag="x"
+                    dragConstraints={{ left: -112, right: 0 }}
+                    dragElastic={0.12}
+                    onDragEnd={(_e, info) => {
+                      if (info.offset.x < -70 || info.velocity.x < -300) {
+                        void handleDeleteThread(p.id, p.display_name);
+                      }
+                    }}
+                    className={`relative z-10 flex items-center gap-3 px-4 py-3.5 bg-background hover:bg-secondary/40 transition cursor-grab active:cursor-grabbing ${
+                      hasUnread ? "bg-snap/5" : ""
+                    }`}
+                  >
+                    {/* Avatar with conditional online presence ring */}
+                    <Link
+                      to={`/messages/${p.id}`}
+                      onClick={() => {
+                        setMetaMap((prev) => {
+                          if (!prev[p.id]) return prev;
+                          return { ...prev, [p.id]: { ...prev[p.id], unreadCount: 0 } };
+                        });
+                      }}
+                      className="relative shrink-0"
+                    >
+                      <Avatar url={p.avatar_url} name={p.display_name} size={46} ring={isTyping} />
+                      {/* ONLY display green dot if person is ACTUALLY online */}
+                      {isOnline && (
+                        <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-background animate-pulse" />
+                      )}
+                    </Link>
+
+                    {/* Conversation partner details & status line */}
+                    <Link
+                      to={`/messages/${p.id}`}
+                      onClick={() => {
+                        setMetaMap((prev) => {
+                          if (!prev[p.id]) return prev;
+                          return { ...prev, [p.id]: { ...prev[p.id], unreadCount: 0 } };
+                        });
+                      }}
+                      className="min-w-0 flex-1"
+                    >
+                      <div className="flex items-center justify-between gap-1">
                         <span
-                          className={`text-[11px] shrink-0 ${
-                            hasUnread ? "text-snap font-bold" : "text-muted-foreground"
+                          className={`text-sm truncate ${
+                            hasUnread ? "font-bold text-foreground" : "font-semibold text-foreground/90"
                           }`}
                         >
-                          {formatDistanceToNowStrict(new Date(meta.lastTime), { addSuffix: false })}
+                          {p.display_name}
                         </span>
-                      ) : null}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <div className="flex items-center text-xs truncate">
-                        {flickStatus.icon}
-                        <span className={`truncate ${flickStatus.color}`}>{flickStatus.text}</span>
+                        {meta?.lastTime ? (
+                          <span
+                            className={`text-[11px] shrink-0 ${
+                              hasUnread ? "text-snap font-bold" : "text-muted-foreground"
+                            }`}
+                          >
+                            {formatDistanceToNowStrict(new Date(meta.lastTime), { addSuffix: false })}
+                          </span>
+                        ) : null}
                       </div>
 
-                      {hasUnread && (
-                        <span className="bg-snap text-snap-foreground text-[11px] font-bold rounded-full min-w-[20px] h-5 px-1.5 grid place-items-center shrink-0 shadow-sm">
-                          {meta.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        <div className="flex items-center text-xs truncate">
+                          {flickStatus.icon}
+                          <span className={`truncate ${flickStatus.color}`}>{flickStatus.text}</span>
+                        </div>
 
-                  {/* Quick Flick Shortcut Button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/messages/${p.id}`);
-                    }}
-                    className="p-2 text-muted-foreground/60 hover:text-snap hover:bg-secondary rounded-full transition shrink-0"
-                    title={`Send Flick to ${p.display_name}`}
-                  >
-                    <Camera className="w-4 h-4" />
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+                        {hasUnread && (
+                          <span className="bg-snap text-snap-foreground text-[11px] font-bold rounded-full min-w-[20px] h-5 px-1.5 grid place-items-center shrink-0 shadow-sm">
+                            {meta.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+
+                    {/* Quick Flick Shortcut Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/messages/${p.id}`);
+                      }}
+                      className="p-2 text-muted-foreground/60 hover:text-snap hover:bg-secondary rounded-full transition shrink-0"
+                      title={`Send Flick to ${p.display_name}`}
+                    >
+                      <Camera className="w-4 h-4" />
+                    </button>
+                  </motion.div>
+                </motion.li>
+              );
+            })}
+          </AnimatePresence>
         </ul>
       </aside>
 

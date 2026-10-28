@@ -7,10 +7,9 @@ interface Props {
   evaluation: SecurityEvaluation;
   email: string;
   onClose: () => void;
-  onOpenInspector: () => void;
 }
 
-export function SecurityBlockModal({ isOpen, evaluation, email, onClose, onOpenInspector }: Props) {
+export function SecurityBlockModal({ isOpen, evaluation, email, onClose }: Props) {
   if (!isOpen) return null;
 
   return (
@@ -59,37 +58,13 @@ export function SecurityBlockModal({ isOpen, evaluation, email, onClose, onOpenI
           </ul>
         </div>
 
-        {/* Technical Signals Table */}
-        <div className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/80 text-[11px] space-y-1.5 mb-5 text-zinc-400">
-          <div className="flex justify-between">
-            <span>Risk Score:</span>
-            <span className="font-mono font-bold text-rose-400">{evaluation.riskScore} / 100 (Critical)</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Accounts on Device:</span>
-            <span className="font-mono text-zinc-200">{evaluation.signalsSummary.deviceAccountsCount}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Incident Reference:</span>
-            <span className="font-mono text-zinc-200">{evaluation.incidentId || "FLK-SEC-CRIT"}</span>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
+        {/* Action Button */}
         <div className="space-y-2">
           <button
-            onClick={onOpenInspector}
-            className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 font-medium text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-            <span>View Identity Signals & Security Inspector</span>
-          </button>
-
-          <button
             onClick={onClose}
-            className="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
+            className="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
           >
-            <span>Acknowledge & Return</span>
+            <span>Close</span>
           </button>
         </div>
 
