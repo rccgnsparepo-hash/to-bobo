@@ -133,7 +133,14 @@ export default function MessagesPage() {
 
         if (!metas[partnerId]) {
           let snippet = m.content || "";
-          if (!snippet) {
+          if (m.media_type === "fashion_look") {
+            try {
+              const p = JSON.parse(m.content || "{}");
+              snippet = `👗 Fashion Look: ${p.lookTitle || "Outfit"}`;
+            } catch {
+              snippet = "👗 Shared a fashion look";
+            }
+          } else if (!snippet) {
             if (m.media_type === "audio") snippet = "Voice note";
             else if (m.media_type === "image") snippet = "Photo snap";
             else if (m.media_type === "video") snippet = "Video snap";
@@ -342,6 +349,13 @@ export default function MessagesPage() {
                       text: "New Voice Note",
                       color: "text-amber-400 font-bold",
                       icon: <Mic className="w-3.5 h-3.5 text-amber-400 fill-amber-400 mr-1" />,
+                    };
+                  }
+                  if (meta.mediaType === "fashion_look") {
+                    return {
+                      text: "New Fashion Look 👗",
+                      color: "text-rose-400 font-bold",
+                      icon: <div className="w-3.5 h-3.5 rounded bg-rose-500 mr-1.5 shadow-sm shadow-rose-500/30" />,
                     };
                   }
                   return {

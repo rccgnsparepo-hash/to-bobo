@@ -43,6 +43,7 @@ import { ActiveCallModal, type CallType } from "@/components/chat/ActiveCallModa
 import { MicPermissionModal } from "@/components/chat/MicPermissionModal";
 import { QuickRepliesBar } from "@/components/chat/QuickRepliesBar";
 import { MediaViewerModal } from "@/components/chat/MediaViewerModal";
+import { FashionLookCard } from "@/components/chat/FashionLookCard";
 import { downloadMedia } from "@/lib/downloadMedia";
 import {
   saveChatTextDraft,
@@ -1560,6 +1561,8 @@ export default function ThreadPage() {
                     {/* Media Render */}
                     {m.media_url && !mediaSrc(m.media_url) ? (
                       <div className="px-4 py-3 text-xs text-muted-foreground animate-pulse">Loading media…</div>
+                    ) : m.media_type === "fashion_look" ? (
+                      <FashionLookCard content={m.content || "{}"} mediaUrl={m.media_url} mine={mine} />
                     ) : m.media_type === "audio" && mediaSrc(m.media_url) ? (
                       <div className="px-3.5 py-2">
                         <VoiceMessage
@@ -1662,7 +1665,7 @@ export default function ThreadPage() {
                     ) : null}
 
                     {/* Text Content */}
-                    {m.content && m.media_type !== "image" && m.media_type !== "video" && m.media_type !== "audio" && (
+                    {m.content && m.media_type !== "image" && m.media_type !== "video" && m.media_type !== "audio" && m.media_type !== "fashion_look" && (
                       renderMessageContentWithLinks(m.content, mine)
                     )}
 

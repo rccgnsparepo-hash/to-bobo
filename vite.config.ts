@@ -175,6 +175,7 @@ export default defineConfig({
       ],
       manifest: false, // we ship /manifest.webmanifest by hand
       workbox: {
+        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
