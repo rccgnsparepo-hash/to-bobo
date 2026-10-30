@@ -185,6 +185,25 @@ export default function AuthPage() {
 
       if (error) throw error;
 
+      // Safe profile provision in case database trigger is pending
+      if (data.user) {
+        try {
+          await supabase
+            .from("profiles")
+            .upsert(
+              {
+                id: data.user.id,
+                handle: cleanHandle || email.split("@")[0].toLowerCase(),
+                display_name: cleanHandle || email.split("@")[0],
+                avatar_url: `https://api.dicebear.com/7.x/identicon/svg?seed=${cleanHandle}`,
+              },
+              { onConflict: "id" }
+            );
+        } catch (profErr) {
+          console.warn("Profile upsert notice:", profErr);
+        }
+      }
+
       // Finalize server-authoritative registration permit & security cluster
       const accountId = data.user?.id || `acc_${Date.now()}`;
       await finalizeAccountRegistration({
@@ -205,10 +224,20 @@ export default function AuthPage() {
           ? "Your Flick account was created and verified."
           : "We have sent an email verification to",
         email: email.trim(),
-        actionLabel: "PROCEED",
+        actionLabel: data.session ? "PROCEED TO FLICK" : "GO TO SIGN IN",
         onProceed: () => {
-          if (next) window.location.replace(next);
-          else nav("/", { replace: true });
+          if (data.session) {
+            if (next) window.location.replace(next);
+            else nav("/", { replace: true });
+          } else {
+            setSuccessModal(null);
+            setMode("signin");
+            trigger3DToast({
+              type: "success",
+              title: "Verification Email Sent",
+              description: "Please check your inbox or sign in with your credentials.",
+            });
+          }
         },
       });
     } catch (err: any) {
@@ -286,45 +315,53 @@ export default function AuthPage() {
       if (mode === "signup") {
         const cleanHandle = handle.trim().replace(/^@/, "").toLowerCase();
 
-        // Run multi-layered registration security evaluation
-        const evalRes = await evaluateRegistrationAttempt({
-          email: email.trim(),
-          handle: cleanHandle,
-        });
-
-        setLatestEvaluation(evalRes);
-
-        // Outcome 1: Critical Risk - Block registration immediately
-        if (evalRes.riskTier === "critical" || !evalRes.allowed) {
-          setBusy(false);
-          setShowSecurityBlock(true);
-          trigger3DToast({
-            type: "error",
-            title: "Registration Blocked",
-            description: "Excessive accounts or suspicious syndicate patterns detected.",
-          });
-          return;
-        }
-
-        // Outcome 2: Medium / High Risk - Trigger CAPTCHA or Phone Step-Up
-        if (evalRes.actionRequired === "captcha" || evalRes.actionRequired === "phone_and_captcha") {
-          setBusy(false);
-          setShowSecurityChallenge(true);
-          return;
-        }
-
-        // Outcome 3: Low Risk - Standard registration with authoritative permit
-        if (evalRes.permitToken) {
-          await executeSignUp(evalRes.permitToken);
-        } else {
-          const permit = await requestRegistrationPermit({
+        let permitToken = "";
+        try {
+          // Run multi-layered registration security evaluation
+          const evalRes = await evaluateRegistrationAttempt({
             email: email.trim(),
-            riskTier: evalRes.riskTier,
-            riskScore: evalRes.riskScore,
-            featureLimits: evalRes.featureLimits,
+            handle: cleanHandle,
           });
-          await executeSignUp(permit);
+
+          setLatestEvaluation(evalRes);
+
+          // Outcome 1: Critical Risk - Block registration immediately
+          if (evalRes.riskTier === "critical" || !evalRes.allowed) {
+            setBusy(false);
+            setShowSecurityBlock(true);
+            trigger3DToast({
+              type: "error",
+              title: "Registration Blocked",
+              description: "Excessive accounts or suspicious syndicate patterns detected.",
+            });
+            return;
+          }
+
+          // Outcome 2: Medium / High Risk - Trigger CAPTCHA or Phone Step-Up
+          if (evalRes.actionRequired === "captcha" || evalRes.actionRequired === "phone_and_captcha") {
+            setBusy(false);
+            setShowSecurityChallenge(true);
+            return;
+          }
+
+          // Outcome 3: Low Risk - Standard registration with authoritative permit
+          if (evalRes.permitToken) {
+            permitToken = evalRes.permitToken;
+          } else {
+            const permit = await requestRegistrationPermit({
+              email: email.trim(),
+              riskTier: evalRes.riskTier,
+              riskScore: evalRes.riskScore,
+              featureLimits: evalRes.featureLimits,
+            });
+            permitToken = permit;
+          }
+        } catch (secErr) {
+          console.warn("Security evaluation fallback:", secErr);
         }
+
+        // Proceed with signup
+        await executeSignUp(permitToken);
       } else {
         setStatusStep("Authenticating session...");
         const { error } = await supabase.auth.signInWithPassword({

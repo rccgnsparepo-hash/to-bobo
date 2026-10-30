@@ -1,0 +1,54 @@
+{
+  "ipHistory": {},
+  "deviceHistory": {},
+  "phoneRegistry": {},
+  "emailRegistry": {},
+  "accountProfiles": {},
+  "clusters": {},
+  "bannedClusters": [],
+  "bannedIdentifiers": [],
+  "auditLog": [
+    {
+      "id": "FLK-SEC-74670AB8",
+      "timestamp": "2026-10-30T08:25:28.871Z",
+      "ip": "127.0.0.1",
+      "email": "tester_verification@gmail.com",
+      "canonicalEmail": "tester_verification@gmail.com",
+      "handle": "tester_verification",
+      "deviceHash": "dev_verify_fresh",
+      "riskScore": 5,
+      "riskTier": "low",
+      "reasons": [],
+      "outcome": "permitted",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "id": "FLK-SEC-9DE04DE2",
+      "timestamp": "2026-10-30T08:24:25.546Z",
+      "ip": "127.0.0.1",
+      "email": "anyuser@gmail.com",
+      "canonicalEmail": "anyuser@gmail.com",
+      "handle": "anyuser",
+      "deviceHash": "dev_any_hash",
+      "riskScore": 5,
+      "riskTier": "low",
+      "reasons": [],
+      "outcome": "permitted",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "id": "FLK-SEC-896DD0FF",
+      "timestamp": "2026-10-30T08:22:18.043Z",
+      "ip": "127.0.0.1",
+      "email": "freshuser999@gmail.com",
+      "canonicalEmail": "freshuser999@gmail.com",
+      "handle": "freshuser999",
+      "deviceHash": "dev_test_unique_1",
+      "riskScore": 5,
+      "riskTier": "low",
+      "reasons": [],
+      "outcome": "permitted",
+      "userAgent": "curl/7.88.1"
+    }
+  ]
+}

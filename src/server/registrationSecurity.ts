@@ -391,6 +391,7 @@ export function evaluateRegistrationAttempt(signals: IdentitySignals): SecurityE
 
   // --- Layer 1: Network Reputation & IP Velocity (Configurable Rate Limits) ---
   const ipAttempts = registry.ipHistory[clientIp] || [];
+  const recent10m = ipAttempts.filter((a) => now - a.timestamp < 10 * 60 * 1000);
   const recent30m = ipAttempts.filter((a) => now - a.timestamp < 30 * 60 * 1000);
   const recent24h = ipAttempts.filter((a) => now - a.timestamp < 24 * 60 * 60 * 1000);
   const successful24h = recent24h.filter((a) => a.outcome === "success" || a.outcome === "registered");
