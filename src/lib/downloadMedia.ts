@@ -84,7 +84,6 @@ export async function downloadMedia(
           const percent = Math.min(99, Math.round((evt.loaded / evt.total) * 100));
           toast.loading(`Downloading media (${percent}%)...`, { id: toastId });
         } else {
-          // Synthetic progress if content-length is withheld
           const approx = Math.min(90, Math.round((evt.loaded / (1024 * 1024 * 3)) * 100));
           toast.loading(`Downloading media (${approx}%)...`, { id: toastId });
         }
@@ -101,7 +100,7 @@ export async function downloadMedia(
 
       xhr.onerror = () => reject(new Error("Network error during media download"));
       xhr.ontimeout = () => reject(new Error("Download timed out"));
-      xhr.timeout = 60000;
+      xhr.timeout = 30000;
       xhr.send();
     });
 
@@ -110,9 +109,25 @@ export async function downloadMedia(
     inFlightDownloads.delete(url);
     return true;
   } catch (xhrErr) {
-    console.warn("[downloadMedia] XHR download failed, attempting canvas/fetch fallback:", xhrErr);
+    // 2. Secondary Strategy: Server-side download proxy (bypasses browser CORS restrictions completely)
+    try {
+      toast.loading("Streaming media download...", { id: toastId });
+      const proxyUrl = `/api/download-proxy?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+      const proxyRes = await fetch(proxyUrl);
+      if (proxyRes.ok) {
+        const proxyBlob = await proxyRes.blob();
+        if (proxyBlob.size > 0) {
+          saveBlob(proxyBlob, filename);
+          toast.success("Media saved successfully!", { id: toastId });
+          inFlightDownloads.delete(url);
+          return true;
+        }
+      }
+    } catch {
+      /* continue to canvas / anchor fallback */
+    }
 
-    // 2. Secondary Strategy for images: Draw through offscreen canvas to overcome strict CORS
+    // 3. Tertiary Strategy for images: Draw through offscreen canvas
     if (ext !== "mp4" && ext !== "mp3") {
       try {
         toast.loading("Processing image download...", { id: toastId });
@@ -147,24 +162,26 @@ export async function downloadMedia(
         toast.success("Media saved successfully!", { id: toastId });
         inFlightDownloads.delete(url);
         return true;
-      } catch (canvasErr) {
-        console.warn("[downloadMedia] Canvas fallback failed:", canvasErr);
+      } catch {
+        /* continue to direct fallback */
       }
     }
 
-    // 3. Third Strategy: fetch blob
+    // 4. Safe direct download fallback: Anchor with download attribute
     try {
-      toast.loading("Finalizing download...", { id: toastId });
-      const res = await fetch(url, { mode: "cors" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      saveBlob(blob, filename);
-      toast.success("Media saved successfully!", { id: toastId });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success("Media opened for saving!", { id: toastId });
       inFlightDownloads.delete(url);
       return true;
-    } catch (finalErr) {
-      console.error("[downloadMedia] All direct download strategies exhausted:", finalErr);
-      toast.error("Could not download media file. Please check your connection.", { id: toastId });
+    } catch {
+      toast.error("Could not complete download.", { id: toastId });
       inFlightDownloads.delete(url);
       return false;
     }

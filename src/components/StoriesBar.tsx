@@ -72,12 +72,19 @@ export function StoriesBar({ onView }: { onView: (groups: StoryGroup[], index: n
 
   return (
     <div className="flex gap-3 overflow-x-auto px-4 py-4 no-scrollbar border-b border-border">
-      <Link to="/stories/new" className="flex flex-col items-center gap-1.5 shrink-0 group">
-        <div className="w-16 h-16 rounded-full bg-secondary border border-dashed border-snap grid place-items-center group-hover:bg-snap/10 transition">
-          <Plus className="w-6 h-6 text-snap" />
+      <button
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent("flick:open-composer"));
+        }}
+        className="flex flex-col items-center gap-1.5 shrink-0 group text-left cursor-pointer"
+        title="What's flickering? (Create Post)"
+      >
+        <div className="w-16 h-16 rounded-full bg-secondary border border-dashed border-snap grid place-items-center group-hover:bg-snap/10 transition shadow-xs">
+          <Plus className="w-6 h-6 text-snap group-hover:scale-110 transition-transform" />
         </div>
-        <span className="text-[11px] text-muted-foreground">Your story</span>
-      </Link>
+        <span className="text-[11px] font-medium text-foreground group-hover:text-snap transition">What's flickering?</span>
+      </button>
       {groups.map((g, i) => (
         <button key={g.author.id} onClick={() => onView(groups, i)} className="flex flex-col items-center gap-1.5 shrink-0">
           <div className="story-ring w-16 h-16">

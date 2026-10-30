@@ -1,243 +1,319 @@
-// Digital Wardrobe & Style Preference Persistence Engine for Flick Fashion Studio
+import { SavedOutfit, GarmentItem, CurrentOutfit, GARMENT_CATALOG } from "./fashionData";
 import { supabase } from "@/integrations/supabase/client";
-import type { CurrentOutfit, FashionStyle, GarmentItem } from "./fashionData";
-import { GARMENT_CATALOG } from "./fashionData";
 
-export type WardrobeCollection = "All" | "Campus" | "Weekend" | "Work" | "Events" | "Favorites";
+export type WardrobeCollection =
+  | "All"
+  | "Favorites"
+  | "Campus"
+  | "Weekend"
+  | "Work"
+  | "Events"
+  | "Date Night"
+  | "Cultural";
 
-export interface SavedOutfit {
-  id: string;
-  userId?: string;
-  name: string;
-  description?: string;
-  collection: WardrobeCollection;
-  isFavorite: boolean;
-  createdAt: number;
-  updatedAt: number;
-  modelId: string;
-  previewUrl: string;
-  stylingRule?: string;
-  items: {
-    topId?: string;
-    bottomId?: string;
-    dressId?: string;
-    shoesId?: string;
-    accessoryId?: string;
-  };
+export interface UserStyleProfile {
+  preferredAesthetics: string[];
+  favoriteColors: string[];
+  topSize: string;
+  bottomSize: string;
+  shoeSize: string;
+  campusOrCity: string;
+  budgetTier: "Essential ($)" | "Mid-Range ($$)" | "Luxury ($$$)";
+  genderPreference: "female" | "male" | "unisex";
+  currency?: "USD" | "CNY" | "NGN";
+  defaultModelId?: string;
 }
 
-export interface UserStylePreferences {
-  preferredStyles: FashionStyle[];
-  preferredColors: string[];
-  defaultModelId: string;
-  currency: "USD" | "CNY" | "NGN";
-  budgetTier: "budget" | "mid" | "luxury";
-  sizes: {
-    top: string;
-    bottom: string;
-    shoes: string;
-  };
-  occasionPriorities: string[];
-}
+export type UserStylePreferences = UserStyleProfile;
 
-const WARDROBE_STORAGE_KEY = "flick:digital_wardrobe_v2";
-const RECENT_TRIED_KEY = "flick:recently_tried_fits";
-const STYLE_PREFS_KEY = "flick:user_style_preferences";
-
-const DEFAULT_PREFERENCES: UserStylePreferences = {
-  preferredStyles: ["Campus Fits", "Streetwear", "Old Money"],
-  preferredColors: ["#D4B996", "#1A1A1A", "#FFFFFF", "#0B1D3A"],
-  defaultModelId: "mei",
+const DEFAULT_PROFILE: UserStyleProfile = {
+  preferredAesthetics: ["Streetwear", "Minimalist", "Campus Fits"],
+  favoriteColors: ["#D4B996", "#111111", "#FFFFFF"],
+  topSize: "M",
+  bottomSize: "32",
+  shoeSize: "40",
+  campusOrCity: "University Campus",
+  budgetTier: "Mid-Range ($$)",
+  genderPreference: "female",
   currency: "USD",
-  budgetTier: "mid",
-  sizes: {
-    top: "M",
-    bottom: "32",
-    shoes: "40",
-  },
-  occasionPriorities: ["Campus", "Weekend Hangouts", "Presentations", "Date Nights"],
+  defaultModelId: "mei",
 };
 
-export function getLocalWardrobe(): SavedOutfit[] {
-  if (typeof window === "undefined") return [];
+/**
+ * Retrieves all saved outfits for the active user
+ */
+export function getSavedWardrobe(userId: string = "guest"): SavedOutfit[] {
   try {
-    const raw = localStorage.getItem(WARDROBE_STORAGE_KEY);
-    if (!raw) {
-      // Seed default saved looks
-      const initial: SavedOutfit[] = [
-        {
-          id: "saved-acubi-starter",
-          name: "Signature Acubi Campus Fit",
-          description: "Comfortable knitwear cardigan with pleated skort and platform lug boots.",
-          collection: "Campus",
-          isFavorite: true,
-          createdAt: Date.now() - 86400000 * 2,
-          updatedAt: Date.now() - 86400000 * 2,
-          modelId: "mei",
-          previewUrl: "/assets/aistudio/download__38__1d85c90f.jpg",
-          stylingRule: "Tonal Earth Harmony: Warm camel knitwear balanced with stacked socks and lug-sole boots.",
-          items: {
-            topId: "top-acubi-cardigan",
-            bottomId: "btm-acubi-skort",
-            shoesId: "shoe-platform-boots",
-            accessoryId: "acc-canvas-tote",
-          },
-        },
-        {
-          id: "saved-senator-gala",
-          name: "Lagos Gala Royal Senator",
-          description: "Midnight navy tunic with crisp white linen pants and handcrafted mules.",
-          collection: "Events",
-          isFavorite: false,
-          createdAt: Date.now() - 86400000 * 4,
-          updatedAt: Date.now() - 86400000 * 4,
-          modelId: "leo",
-          previewUrl: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=600&q=80",
-          stylingRule: "Focal Contrast Rule: Rich deep navy tunic embroidery paired with crisp white pants.",
-          items: {
-            topId: "top-senator-tunic",
-            bottomId: "btm-senator-pants",
-            shoesId: "shoe-burnished-mules",
-          },
-        },
-      ];
-      localStorage.setItem(WARDROBE_STORAGE_KEY, JSON.stringify(initial));
-      return initial;
-    }
+    const raw = localStorage.getItem(`flick:wardrobe:${userId}`);
+    if (!raw) return [];
     return JSON.parse(raw);
   } catch {
     return [];
   }
 }
 
-export function saveOutfitToLocalWardrobe(outfit: Omit<SavedOutfit, "id" | "createdAt" | "updatedAt">): SavedOutfit {
-  const current = getLocalWardrobe();
-  const newOutfit: SavedOutfit = {
-    ...outfit,
-    id: `outfit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  const updated = [newOutfit, ...current];
-  try {
-    localStorage.setItem(WARDROBE_STORAGE_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent("flick:wardrobe-updated"));
-  } catch {}
-  return newOutfit;
+/**
+ * Saves a new or updated outfit into the user's digital wardrobe
+ */
+export async function saveOutfitToWardrobe(
+  outfit: Omit<SavedOutfit, "id" | "createdAt" | "updatedAt"> & { id?: string },
+  userId: string = "guest"
+): Promise<SavedOutfit> {
+  const current = getSavedWardrobe(userId);
+  const now = new Date().toISOString();
+
+  let target: SavedOutfit;
+  if (outfit.id) {
+    target = {
+      ...outfit,
+      id: outfit.id,
+      createdAt: (current.find((o) => o.id === outfit.id)?.createdAt) || now,
+      updatedAt: now,
+    };
+    const idx = current.findIndex((o) => o.id === outfit.id);
+    if (idx >= 0) {
+      current[idx] = target;
+    } else {
+      current.unshift(target);
+    }
+  } else {
+    target = {
+      ...outfit,
+      id: `fit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    current.unshift(target);
+  }
+
+  localStorage.setItem(`flick:wardrobe:${userId}`, JSON.stringify(current));
+  window.dispatchEvent(new CustomEvent("flick:wardrobe-updated", { detail: { count: current.length } }));
+
+  // Background cloud sync to Supabase if logged in
+  if (userId && userId !== "guest") {
+    try {
+      const { data } = await supabase.from("user_settings").select("theme").eq("user_id", userId).maybeSingle();
+      const existingTheme = (data?.theme as Record<string, unknown>) || {};
+      await supabase.from("user_settings").upsert({
+        user_id: userId,
+        theme: {
+          ...existingTheme,
+          fashion_wardrobe: current.slice(0, 50),
+        },
+        updated_at: now,
+      });
+    } catch (e) {
+      console.warn("Cloud sync of wardrobe skipped:", e);
+    }
+  }
+
+  return target;
 }
 
-export function updateSavedOutfit(id: string, updates: Partial<SavedOutfit>): boolean {
-  const current = getLocalWardrobe();
-  const idx = current.findIndex((o) => o.id === id);
-  if (idx < 0) return false;
-  current[idx] = {
-    ...current[idx],
-    ...updates,
-    updatedAt: Date.now(),
-  };
-  try {
-    localStorage.setItem(WARDROBE_STORAGE_KEY, JSON.stringify(current));
-    window.dispatchEvent(new CustomEvent("flick:wardrobe-updated"));
-  } catch {}
+/**
+ * Deletes an outfit from the user's wardrobe
+ */
+export function deleteOutfitFromWardrobe(outfitId: string, userId: string = "guest"): boolean {
+  const current = getSavedWardrobe(userId);
+  const filtered = current.filter((o) => o.id !== outfitId);
+  localStorage.setItem(`flick:wardrobe:${userId}`, JSON.stringify(filtered));
+  window.dispatchEvent(new CustomEvent("flick:wardrobe-updated", { detail: { count: filtered.length } }));
   return true;
 }
 
-export function duplicateSavedOutfit(id: string): SavedOutfit | null {
-  const current = getLocalWardrobe();
-  const target = current.find((o) => o.id === id);
-  if (!target) return null;
-  const duplicated: SavedOutfit = {
-    ...target,
-    id: `outfit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    name: `${target.name} (Copy)`,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  const updated = [duplicated, ...current];
-  try {
-    localStorage.setItem(WARDROBE_STORAGE_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent("flick:wardrobe-updated"));
-  } catch {}
-  return duplicated;
+/**
+ * Duplicates an existing outfit
+ */
+export async function duplicateOutfit(outfitId: string, userId: string = "guest"): Promise<SavedOutfit | null> {
+  const current = getSavedWardrobe(userId);
+  const found = current.find((o) => o.id === outfitId);
+  if (!found) return null;
+
+  return saveOutfitToWardrobe(
+    {
+      ...found,
+      id: undefined,
+      name: `${found.name} (Copy)`,
+      isFavorite: false,
+    },
+    userId
+  );
 }
 
-export function deleteSavedOutfit(id: string): boolean {
-  const current = getLocalWardrobe();
-  const filtered = current.filter((o) => o.id !== id);
-  try {
-    localStorage.setItem(WARDROBE_STORAGE_KEY, JSON.stringify(filtered));
-    window.dispatchEvent(new CustomEvent("flick:wardrobe-updated"));
-  } catch {}
-  return true;
+/**
+ * Toggles the favorite status of a saved outfit
+ */
+export function toggleFavoriteOutfit(outfitId: string, userId: string = "guest"): boolean {
+  const current = getSavedWardrobe(userId);
+  const found = current.find((o) => o.id === outfitId);
+  if (!found) return false;
+
+  found.isFavorite = !found.isFavorite;
+  found.updatedAt = new Date().toISOString();
+  localStorage.setItem(`flick:wardrobe:${userId}`, JSON.stringify(current));
+  window.dispatchEvent(new CustomEvent("flick:wardrobe-updated"));
+  return found.isFavorite;
 }
 
-export function toggleFavoriteOutfit(id: string): boolean {
-  const current = getLocalWardrobe();
-  const target = current.find((o) => o.id === id);
-  if (!target) return false;
-  target.isFavorite = !target.isFavorite;
-  target.updatedAt = Date.now();
+/**
+ * Records an outfit in the recently tried list
+ */
+export function recordRecentlyTried(
+  items: CurrentOutfit | {
+    top?: GarmentItem;
+    bottom?: GarmentItem;
+    dress?: GarmentItem;
+    shoes?: GarmentItem;
+    accessory?: GarmentItem;
+  },
+  modelId: string = "mei",
+  userId: string = "guest"
+) {
   try {
-    localStorage.setItem(WARDROBE_STORAGE_KEY, JSON.stringify(current));
-    window.dispatchEvent(new CustomEvent("flick:wardrobe-updated"));
-  } catch {}
-  return target.isFavorite;
+    const key = `flick:recently_tried:${userId}`;
+    const raw = localStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    const entry = {
+      id: `recent_${Date.now()}`,
+      items,
+      modelId,
+      timestamp: new Date().toISOString(),
+    };
+    // Deduplicate against the very last tried items
+    const updated = [entry, ...list.slice(0, 15)];
+    localStorage.setItem(key, JSON.stringify(updated));
+  } catch {
+    /* fallback */
+  }
 }
 
-export function getRecentlyTriedOutfits(): { items: CurrentOutfit; timestamp: number }[] {
-  if (typeof window === "undefined") return [];
+/**
+ * Gets the recently tried list
+ */
+export function getRecentlyTried(userId: string = "guest"): any[] {
   try {
-    return JSON.parse(localStorage.getItem(RECENT_TRIED_KEY) || "[]");
+    const raw = localStorage.getItem(`flick:recently_tried:${userId}`);
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-export function recordRecentlyTried(outfit: CurrentOutfit): void {
-  if (typeof window === "undefined") return;
+/**
+ * Reads user style profile
+ */
+export function getUserStyleProfile(userId: string = "guest"): UserStyleProfile {
   try {
-    const list = getRecentlyTriedOutfits();
-    const cleanEntry = {
-      items: {
-        top: outfit.top,
-        bottom: outfit.bottom,
-        dress: outfit.dress,
-        shoes: outfit.shoes,
-        accessory: outfit.accessory,
-      },
-      timestamp: Date.now(),
-    };
-    const updated = [cleanEntry, ...list.slice(0, 9)];
-    localStorage.setItem(RECENT_TRIED_KEY, JSON.stringify(updated));
-  } catch {}
-}
-
-export function getUserStylePreferences(): UserStylePreferences {
-  if (typeof window === "undefined") return DEFAULT_PREFERENCES;
-  try {
-    const raw = localStorage.getItem(STYLE_PREFS_KEY);
-    return raw ? { ...DEFAULT_PREFERENCES, ...JSON.parse(raw) } : DEFAULT_PREFERENCES;
+    const raw = localStorage.getItem(`flick:style_profile:${userId}`);
+    if (!raw) return DEFAULT_PROFILE;
+    return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
   } catch {
-    return DEFAULT_PREFERENCES;
+    return DEFAULT_PROFILE;
   }
 }
 
-export function saveUserStylePreferences(prefs: Partial<UserStylePreferences>): UserStylePreferences {
-  const current = getUserStylePreferences();
-  const updated = { ...current, ...prefs };
+/**
+ * Saves user style profile
+ */
+export function saveUserStyleProfile(profile: Partial<UserStyleProfile>, userId: string = "guest") {
   try {
-    localStorage.setItem(STYLE_PREFS_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent("flick:style-prefs-updated"));
-  } catch {}
-  return updated;
+    const curr = getUserStyleProfile(userId);
+    const updated = { ...curr, ...profile };
+    localStorage.setItem(`flick:style_profile:${userId}`, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent("flick:style-profile-updated", { detail: updated }));
+  } catch {
+    /* fallback */
+  }
 }
 
-export function resolveGarmentsForOutfit(items: SavedOutfit["items"]): CurrentOutfit {
-  const resolved: CurrentOutfit = {};
-  if (items.topId) resolved.top = GARMENT_CATALOG.find((g) => g.id === items.topId);
-  if (items.bottomId) resolved.bottom = GARMENT_CATALOG.find((g) => g.id === items.bottomId);
-  if (items.dressId) resolved.dress = GARMENT_CATALOG.find((g) => g.id === items.dressId);
-  if (items.shoesId) resolved.shoes = GARMENT_CATALOG.find((g) => g.id === items.shoesId);
-  if (items.accessoryId) resolved.accessory = GARMENT_CATALOG.find((g) => g.id === items.accessoryId);
-  return resolved;
+/**
+ * Resolves garments for an outfit whether given IDs or objects
+ */
+export function resolveGarmentsForOutfit(items?: {
+  top?: GarmentItem | string;
+  bottom?: GarmentItem | string;
+  dress?: GarmentItem | string;
+  shoes?: GarmentItem | string;
+  accessory?: GarmentItem | string;
+  topId?: string;
+  bottomId?: string;
+  dressId?: string;
+  shoesId?: string;
+  accessoryId?: string;
+}): CurrentOutfit {
+  if (!items) return { shoes: GARMENT_CATALOG.find((g) => g.category === "shoes") };
+
+  const resolveItem = (val?: GarmentItem | string, idFallback?: string): GarmentItem | undefined => {
+    if (val && typeof val === "object" && val.id) return val;
+    const targetId = typeof val === "string" ? val : idFallback;
+    if (!targetId) return undefined;
+    return GARMENT_CATALOG.find((g) => g.id === targetId);
+  };
+
+  return {
+    top: resolveItem(items.top, items.topId),
+    bottom: resolveItem(items.bottom, items.bottomId),
+    dress: resolveItem(items.dress, items.dressId),
+    shoes: resolveItem(items.shoes, items.shoesId) || GARMENT_CATALOG.find((g) => g.category === "shoes"),
+    accessory: resolveItem(items.accessory, items.accessoryId),
+  };
 }
+
+/**
+ * Saves outfit to digital wardrobe with flexible payload (from modal or studio)
+ */
+export async function saveOutfitToLocalWardrobe(
+  outfitData: {
+    name: string;
+    description?: string;
+    collection: string;
+    isFavorite?: boolean;
+    modelId: string;
+    previewUrl?: string;
+    stylingRule?: string;
+    items: {
+      topId?: string;
+      bottomId?: string;
+      dressId?: string;
+      shoesId?: string;
+      accessoryId?: string;
+      top?: GarmentItem;
+      bottom?: GarmentItem;
+      dress?: GarmentItem;
+      shoes?: GarmentItem;
+      accessory?: GarmentItem;
+    };
+  },
+  userId: string = "guest"
+): Promise<SavedOutfit> {
+  const resolved = resolveGarmentsForOutfit(outfitData.items);
+  return saveOutfitToWardrobe(
+    {
+      userId,
+      name: outfitData.name,
+      description: outfitData.description,
+      collection: outfitData.collection as any,
+      isFavorite: !!outfitData.isFavorite,
+      modelId: outfitData.modelId,
+      previewImage: outfitData.previewUrl || "",
+      previewUrl: outfitData.previewUrl,
+      stylingRule: outfitData.stylingRule,
+      items: {
+        ...resolved,
+        shoes: resolved.shoes || GARMENT_CATALOG.find((g) => g.category === "shoes")!,
+      },
+    },
+    userId
+  );
+}
+
+// Aliases for compatibility
+export const getLocalWardrobe = getSavedWardrobe;
+export const deleteSavedOutfit = deleteOutfitFromWardrobe;
+export const duplicateSavedOutfit = duplicateOutfit;
+export const getRecentlyTriedOutfits = getRecentlyTried;
+export const getUserStylePreferences = (userId: string = "guest"): UserStylePreferences => getUserStyleProfile(userId);
+export const saveUserStylePreferences = (prefs: Partial<UserStylePreferences>, userId: string = "guest") => saveUserStyleProfile(prefs, userId);
+
+export type { SavedOutfit };
+
