@@ -54,65 +54,33 @@ function playOfflineChime() {
 }
 
 /**
- * Announce offline state with authentic Pidgin pronunciation and Nigerian accent prioritization
+ * Announce offline state with Optimus Prime audio
  */
 export function playOfflineVoiceAlert(force = false) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  if (typeof window === "undefined") return;
+  if (hasSpokenOffline && !force) return;
+  hasSpokenOffline = true;
+
   try {
-    window.speechSynthesis.cancel();
     playOfflineChime();
-
-    // Natural Nigerian Pidgin phrasing with rhythm markers for TTS engines
-    const phrase = "You no get internet again o! Check your connection, you dey browse for offline mode.";
-    const utterance = new SpeechSynthesisUtterance(phrase);
-    utterance.rate = 0.94; // rhythmic, unhurried West African cadence
-    utterance.pitch = 1.08; // slightly melodic intonation
-    utterance.volume = 1.0;
-
-    const voices = window.speechSynthesis.getVoices();
-    // 1. Prefer Nigerian English (en-NG)
-    const ngVoice = voices.find((v) => {
-      const l = v.lang.toLowerCase().replace("_", "-");
-      const n = v.name.toLowerCase();
-      return l === "en-ng" || l.includes("ng") || n.includes("nigeria");
-    });
-
-    // 2. Fallback to West/South African English
-    const regionalVoice = voices.find((v) => {
-      const l = v.lang.toLowerCase().replace("_", "-");
-      return l.startsWith("en-gh") || l.startsWith("en-za");
-    });
-
-    // 3. Fallback to clean natural English
-    const naturalVoice = voices.find(
-      (v) => v.lang.startsWith("en") && !v.name.toLowerCase().includes("whisper")
-    );
-
-    utterance.voice = ngVoice || regionalVoice || naturalVoice || null;
-
-    // Small delay so audio context chime rings first
-    setTimeout(() => {
-      window.speechSynthesis.speak(utterance);
-    }, 120);
+    // Play authentic Optimus Prime Guardian voice alert
+    const audio = new Audio("/assets/aistudio/Optimus-Prime-2026-10-30-09-06-I-am-the-Father_-I-provide-Guardiance-here_-and_285918b1.mp3");
+    audio.volume = 0.95;
+    audio.play().catch(() => {});
   } catch (err) {
-    console.warn("Speech synthesis fallback:", err);
+    console.warn("Offline audio error:", err);
   }
 }
 
 export function playOnlineVoiceAlert() {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  if (typeof window === "undefined") return;
+  hasSpokenOffline = false;
+
   try {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance("Network don set! You are back online.");
-    utterance.rate = 1.02;
-    utterance.pitch = 1.05;
-    utterance.volume = 0.95;
-
-    const voices = window.speechSynthesis.getVoices();
-    const ngVoice = voices.find((v) => v.lang.toLowerCase().includes("ng"));
-    if (ngVoice) utterance.voice = ngVoice;
-
-    window.speechSynthesis.speak(utterance);
+    // Play authentic Optimus Prime "Welcome to Flick" when connection restored
+    const audio = new Audio("/assets/aistudio/Optimus-Prime-2026-10-30-09-04-Welcome-to-Flick_76cf21e1.mp3");
+    audio.volume = 0.95;
+    audio.play().catch(() => {});
   } catch {}
 }
 

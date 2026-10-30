@@ -220,12 +220,18 @@ export default function IntroPage() {
       setStep("reveal");
       playSynthesizedIntroSound("impact");
       void triggerSuccessHaptic();
-      setTimeout(() => playSynthesizedIntroSound("chime"), 300);
+      setTimeout(() => {
+        if (!isMuted) {
+          const audio = new Audio("/assets/aistudio/Optimus-Prime-2026-10-30-09-04-Welcome-to-Flick_76cf21e1.mp3");
+          audio.volume = 0.95;
+          audio.play().catch(() => {});
+        }
+      }, 300);
     }, 2800);
 
     const t5 = setTimeout(() => {
       setStep("ready");
-    }, 3900);
+    }, 4200);
 
     return () => {
       clearTimeout(t1);
@@ -234,7 +240,7 @@ export default function IntroPage() {
       clearTimeout(t4);
       clearTimeout(t5);
     };
-  }, [playSynthesizedIntroSound]);
+  }, [playSynthesizedIntroSound, isMuted]);
 
   const restartAnimation = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -258,10 +264,17 @@ export default function IntroPage() {
     setTimeout(() => {
       setStep("reveal");
       playSynthesizedIntroSound("impact");
+      setTimeout(() => {
+        if (!isMuted) {
+          const audio = new Audio("/assets/aistudio/Optimus-Prime-2026-10-30-09-04-Welcome-to-Flick_76cf21e1.mp3");
+          audio.volume = 0.95;
+          audio.play().catch(() => {});
+        }
+      }, 300);
     }, 2800);
     setTimeout(() => {
       setStep("ready");
-    }, 3900);
+    }, 4200);
   };
 
   return (

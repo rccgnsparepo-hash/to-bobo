@@ -13,8 +13,7 @@ import ThreadPage from "@/pages/Thread";
 import ProfilePage from "@/pages/Profile";
 import StoryComposerPage from "@/pages/StoryComposer";
 import ChallengesPage from "@/pages/Challenges";
-import FashionPage from "@/pages/Fashion";
-import WallpapersPage from "@/pages/Wallpapers";
+import SpacePage from "@/pages/Space";
 import FlickGamesPage from "@/pages/FlickGames";
 import AuthPage from "@/pages/Auth";
 import OAuthConsentPage from "@/pages/OAuthConsent";
@@ -188,21 +187,21 @@ function AnimatedRoutes() {
             }
           />
           <Route
-            path="/fashion"
+            path="/space"
             element={
               <PageTransition>
-                <FashionPage />
+                <SpacePage />
               </PageTransition>
             }
           />
-          <Route
-            path="/wallpapers"
-            element={
-              <PageTransition>
-                <FashionPage />
-              </PageTransition>
-            }
-          />
+          <Route path="/live" element={<Navigate to="/space?tab=live" replace />} />
+          <Route path="/go-live" element={<Navigate to="/space?tab=live" replace />} />
+          <Route path="/rooms" element={<Navigate to="/space?tab=rooms" replace />} />
+          <Route path="/calls" element={<Navigate to="/space?tab=calls" replace />} />
+          <Route path="/classes" element={<Navigate to="/space?tab=classes" replace />} />
+          <Route path="/prep" element={<Navigate to="/space?tab=prep" replace />} />
+          <Route path="/fashion" element={<Navigate to="/space" replace />} />
+          <Route path="/wallpapers" element={<Navigate to="/space" replace />} />
           <Route
             path="/games"
             element={

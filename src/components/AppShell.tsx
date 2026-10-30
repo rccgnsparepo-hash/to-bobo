@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Layers,
   Sparkles,
+  Radio,
 } from "lucide-react";
 import { FlickPostModal } from "./post/FlickPostModal";
 import { useAuth } from "@/lib/auth";
@@ -363,16 +364,19 @@ export function AppShell() {
             );
           })}
           <Link
-            to="/fashion"
-            title="Flick Fashion & Styles"
+            to="/space"
+            title="Go Live & Flick Space"
             className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
-              pathname.startsWith("/fashion") || pathname.startsWith("/wallpapers")
+              pathname.startsWith("/space") || pathname.startsWith("/live")
                 ? "bg-secondary font-semibold"
                 : "hover:bg-secondary/60"
             }`}
           >
-            <Sparkles className="w-6 h-6 shrink-0 text-rose-400" />
-            <span className="hidden xl:inline">Fashion</span>
+            <div className="relative shrink-0">
+              <Radio className="w-6 h-6 text-rose-500 animate-pulse" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500" />
+            </div>
+            <span className="hidden xl:inline">Go live</span>
           </Link>
           <Link
             to="/games"
@@ -645,7 +649,7 @@ export function AppShell() {
                 </div>
               </button>
               {[
-                { to: "/fashion", icon: Sparkles, label: "Flick Fashion & Styles" },
+                { to: "/space", icon: Radio, label: "Go Live & Flick Space" },
                 { to: "/games", icon: Gamepad2, label: "Flick Games (Level Devil)" },
                 { to: "/creator-insights", icon: BarChart3, label: "Creator Insights" },
                 { to: "/camera", icon: Camera, label: "Camera & Stories" },

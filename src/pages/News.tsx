@@ -108,16 +108,13 @@ export default function NewsPage() {
 
   const speakHeadline = async (it: NewsItem) => {
     if (speakingId === it.id) {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      notificationAudio.stopVoice();
       setSpeakingId(null);
       return;
     }
     setSpeakingId(it.id);
-    toast("Reading headline aloud…");
-    // Speak headline only as requested
-    await notificationAudio.speak(it.title);
+    toast("Optimus Prime: News from the Wire");
+    await notificationAudio.playOptimusVoice("news", 0.95);
     setSpeakingId(null);
   };
 

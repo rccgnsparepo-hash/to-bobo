@@ -1,13 +1,12 @@
 /**
  * Flick Notification & Announcement Audio Engine
- * Synchronizes custom audio files, Web Audio synthesis, and dynamic caller ID speech
- * so notifications can speak the caller's identity ("Ryder just sent you a chat")
- * and the app launch page can play the synchronized "Welcome to Flick" audio.
+ * Powered by user-uploaded authentic Optimus Prime voice model clips.
+ * Replaces all synthetic AI text-to-speech with actual Optimus Prime voice clips.
  */
 
 import { playSound, soundEngine } from "./soundEngine";
 
-export type NotificationKind = "message" | "like" | "comment" | "story" | "post" | "mention" | "system" | "news";
+export type NotificationKind = "message" | "like" | "comment" | "story" | "post" | "mention" | "system" | "news" | "guardian";
 
 export interface CallerInfo {
   id?: string | null;
@@ -17,22 +16,35 @@ export interface CallerInfo {
 }
 
 const VOICE_PREF_KEY = "flick:voice_announcements_enabled";
-const CUSTOM_SOUNDS_BASE = "/sounds";
 
-// Known audio files that can be dropped into /public/sounds/
+// User-provided Optimus Prime Voice Model Clips
+export const OPTIMUS_SOUNDS = {
+  welcome: "/assets/aistudio/Optimus-Prime-2026-10-30-09-04-Welcome-to-Flick_76cf21e1.mp3",
+  message: "/assets/aistudio/Optimus-Prime-2026-10-30-09-04-you-have-a-new-message_f1f92681.mp3",
+  sentFlick: "/assets/aistudio/Optimus-Prime-2026-10-30-09-03-sent-you-a-flick_98473c18.mp3",
+  news: "/assets/aistudio/Optimus-Prime-2026-10-30-09-07-News-from-the-Wire_f947a250.mp3",
+  guardian: "/assets/aistudio/Optimus-Prime-2026-10-30-09-06-I-am-the-Father_-I-provide-Guardiance-here_-and_285918b1.mp3",
+} as const;
+
+export type OptimusClipKey = keyof typeof OPTIMUS_SOUNDS;
+
+// Known audio files mapped to Optimus Prime voice clips
 export const SOUND_FILE_MAP: Record<string, string> = {
-  welcome: `${CUSTOM_SOUNDS_BASE}/welcome-to-flick.mp3`,
-  chat: `${CUSTOM_SOUNDS_BASE}/chat-notification.mp3`,
-  like: `${CUSTOM_SOUNDS_BASE}/like-notification.mp3`,
-  comment: `${CUSTOM_SOUNDS_BASE}/comment-notification.mp3`,
-  story: `${CUSTOM_SOUNDS_BASE}/story-notification.mp3`,
-  general: `${CUSTOM_SOUNDS_BASE}/notification.wav`,
-  news: `${CUSTOM_SOUNDS_BASE}/news-wire-push.wav`,
+  welcome: OPTIMUS_SOUNDS.welcome,
+  chat: OPTIMUS_SOUNDS.message,
+  message: OPTIMUS_SOUNDS.message,
+  like: OPTIMUS_SOUNDS.sentFlick,
+  comment: OPTIMUS_SOUNDS.sentFlick,
+  story: OPTIMUS_SOUNDS.sentFlick,
+  post: OPTIMUS_SOUNDS.sentFlick,
+  general: OPTIMUS_SOUNDS.sentFlick,
+  news: OPTIMUS_SOUNDS.news,
+  guardian: OPTIMUS_SOUNDS.guardian,
 };
 
 class NotificationAudioEngine {
   private voiceEnabled = true;
-  private isSpeaking = false;
+  private currentAudio: HTMLAudioElement | null = null;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -56,9 +68,6 @@ class NotificationAudioEngine {
     } catch {}
   }
 
-  /**
-   * Resolves the friendly caller display string from available actor fields.
-   */
   public getCallerIdentifier(actor?: CallerInfo): string {
     if (!actor) return "Someone";
     if (actor.display_name && actor.display_name.trim().length > 0) {
@@ -73,11 +82,6 @@ class NotificationAudioEngine {
     return "Someone";
   }
 
-  /**
-   * Formats the natural spoken phrase including dynamic caller ID before notification action.
-   * For news: speaks ONLY the headline/header summary.
-   * For intra-news/posts: reads "caller posted: [caption or meme text summary]".
-   */
   public getAnnouncementPhrase(kind: NotificationKind, callerName: string, contentSummary?: string): string {
     switch (kind) {
       case "message":
@@ -89,32 +93,31 @@ class NotificationAudioEngine {
       case "story":
         return `${callerName} posted a story`;
       case "post":
-        if (contentSummary && contentSummary.trim()) {
-          const clean = contentSummary.trim().replace(/^(Posted a flick|Published):?\s*/i, "");
-          const truncated = clean.length > 140 ? clean.slice(0, 137) + "..." : clean;
-          return `${callerName} posted: ${truncated}`;
-        }
-        return `${callerName} just flicked`;
+        return contentSummary ? `${callerName} posted: ${contentSummary.slice(0, 80)}` : `${callerName} just flicked`;
       case "news":
-        // Speaks ONLY the header / headline summary of the news
-        if (contentSummary && contentSummary.trim()) {
-          const clean = contentSummary.trim();
-          return clean.length > 160 ? clean.slice(0, 157) + "..." : clean;
-        }
-        return callerName !== "News Wire" ? callerName : "Latest breaking headline";
+        return contentSummary ? contentSummary.slice(0, 100) : "Latest news headline";
       default:
         return contentSummary || `New notification from ${callerName}`;
     }
   }
 
   /**
-   * Plays a custom audio file with fallback detection
+   * Plays an audio file with HTML5 Audio
    */
-  public async playCustomAudioFile(url: string, volume = 0.85): Promise<boolean> {
-    if (typeof window === "undefined" || !url || typeof url !== "string") return false;
+  public async playCustomAudioFile(url: string, volume = 0.95): Promise<boolean> {
+    if (typeof window === "undefined" || !url) return false;
+
     return new Promise((resolve) => {
       try {
+        if (this.currentAudio) {
+          try {
+            this.currentAudio.pause();
+            this.currentAudio.currentTime = 0;
+          } catch {}
+        }
+
         const audio = new Audio();
+        this.currentAudio = audio;
         audio.preload = "auto";
         audio.volume = Math.max(0, Math.min(1, volume));
         let finished = false;
@@ -122,11 +125,12 @@ class NotificationAudioEngine {
         const cleanup = (success: boolean) => {
           if (finished) return;
           finished = true;
+          if (this.currentAudio === audio) {
+            this.currentAudio = null;
+          }
           try {
             audio.pause();
             audio.removeAttribute("src");
-            audio.load();
-            audio.remove();
           } catch {}
           resolve(success);
         };
@@ -138,13 +142,13 @@ class NotificationAudioEngine {
         });
 
         // Safety timeout if audio stalls
-        const timer = setTimeout(() => cleanup(false), 5000);
+        const timer = setTimeout(() => cleanup(false), 8000);
 
         audio.src = url;
         audio
           .play()
           .then(() => {
-            // Playing successfully
+            // Audio playing successfully
           })
           .catch(() => {
             clearTimeout(timer);
@@ -157,128 +161,114 @@ class NotificationAudioEngine {
   }
 
   /**
-   * Speaks a phrase with Web Speech Synthesis API
+   * Plays genuine Optimus Prime voice clip instead of generic AI speech synthesis
    */
-  public speak(phrase: string): Promise<void> {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      return Promise.resolve();
-    }
+  public async playOptimusVoice(clip: OptimusClipKey = "sentFlick", volume = 0.95): Promise<boolean> {
+    if (!this.voiceEnabled) return false;
+    const path = OPTIMUS_SOUNDS[clip] || OPTIMUS_SOUNDS.sentFlick;
+    return this.playCustomAudioFile(path, volume);
+  }
 
-    return new Promise((resolve) => {
+  /**
+   * Stop any currently sounding voice/speech
+   */
+  public stopVoice(): void {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(phrase);
-        utterance.rate = 1.05;
-        utterance.pitch = 1.02;
-        utterance.volume = 0.9;
+      } catch {}
+    }
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+      } catch {}
+      this.currentAudio = null;
+    }
+  }
 
-        // Pick an English voice if available
-        const voices = window.speechSynthesis.getVoices();
-        const enVoice = voices.find(
-          (v) => v.lang.startsWith("en") && (v.name.includes("Google") || v.name.includes("Natural") || v.default)
-        );
-        if (enVoice) utterance.voice = enVoice;
+  /**
+   * Speaks using Optimus Prime's voice instead of robotic AI TTS
+   */
+  public async speak(phrase?: string): Promise<void> {
+    if (!this.voiceEnabled) return;
 
-        utterance.onend = () => {
-          this.isSpeaking = false;
-          resolve();
-        };
-        utterance.onerror = () => {
-          this.isSpeaking = false;
-          resolve();
-        };
+    const text = (phrase || "").toLowerCase();
+    let clip: OptimusClipKey = "sentFlick";
 
-        this.isSpeaking = true;
-        window.speechSynthesis.speak(utterance);
+    if (text.includes("welcome") || text.includes("flick") || text.includes("name") || text.includes("intro")) {
+      clip = "welcome";
+    } else if (
+      text.includes("chat") ||
+      text.includes("message") ||
+      text.includes("calling") ||
+      text.includes("call") ||
+      text.includes("dm")
+    ) {
+      clip = "message";
+    } else if (text.includes("news") || text.includes("wire") || text.includes("headline") || text.includes("breaking")) {
+      clip = "news";
+    } else if (
+      text.includes("father") ||
+      text.includes("guardian") ||
+      text.includes("faratech") ||
+      text.includes("security") ||
+      text.includes("protect")
+    ) {
+      clip = "guardian";
+    } else {
+      clip = "sentFlick";
+    }
 
-        // Fallback timeout in case speech synth hangs
-        setTimeout(() => {
-          if (this.isSpeaking) {
-            this.isSpeaking = false;
-            resolve();
-          }
-        }, 4000);
-      } catch {
-        resolve();
-      }
-    });
+    await this.playOptimusVoice(clip, 0.95);
   }
 
   /**
    * Main notification audio trigger:
-   * 1. Speaks dynamic caller identifier + action ("Ryder just sent you a chat")
-   * 2. Plays synchronized notification audio sound effect
+   * Plays authentic Optimus Prime audio according to notification kind.
    */
   public async playNotificationAudio(
     kind: NotificationKind,
-    actor?: CallerInfo,
+    _actor?: CallerInfo,
     customSoundUrl?: string,
-    contentSummary?: string
+    _contentSummary?: string
   ): Promise<void> {
-    const callerName = this.getCallerIdentifier(actor);
-    const phrase = this.getAnnouncementPhrase(kind, callerName, contentSummary);
+    if (!this.voiceEnabled && !soundEngine.isSoundEnabled()) return;
 
-    // 1. Play custom audio file or synthesized chime ONLY if sound effect is enabled
-    if (soundEngine.isSoundEnabled()) {
-      const soundKey = kind === "message" ? "chat" : kind;
-      const targetFile = customSoundUrl || SOUND_FILE_MAP[soundKey] || SOUND_FILE_MAP.general;
+    const soundKey = kind === "message" ? "chat" : kind;
+    const targetFile = customSoundUrl || SOUND_FILE_MAP[soundKey] || OPTIMUS_SOUNDS.sentFlick;
 
-      let filePlayed = await this.playCustomAudioFile(targetFile);
-      if (!filePlayed && targetFile !== SOUND_FILE_MAP.general) {
-        filePlayed = await this.playCustomAudioFile(SOUND_FILE_MAP.general);
+    const played = await this.playCustomAudioFile(targetFile, 0.95);
+    if (!played) {
+      if (kind === "message") {
+        playSound("message_received");
+      } else if (kind === "like") {
+        playSound("flick_reaction");
+      } else {
+        playSound("notification_chime");
       }
-
-      // If no custom audio file exists yet, fallback to built-in snappy sound effect
-      if (!filePlayed) {
-        if (kind === "message") {
-          playSound("message_received");
-        } else if (kind === "like") {
-          playSound("flick_reaction");
-        } else {
-          playSound("notification_chime");
-        }
-      }
-    }
-
-    // 2. Announce caller if voice announcements are enabled
-    if (this.voiceEnabled) {
-      await this.speak(phrase);
     }
   }
 
   /**
-   * Plays the "Welcome to Flick" audio at app launch.
-   * Resolves only after the audio finishes sounding so the page can wait before transiting.
+   * Plays the Optimus Prime "Welcome to Flick" audio at app launch.
    */
   public async playWelcomeToFlickAudio(): Promise<void> {
     if (typeof window === "undefined") return;
 
-    // First attempt custom audio file: /sounds/welcome-to-flick.mp3
-    const customPlayed = await this.playCustomAudioFile(SOUND_FILE_MAP.welcome, 0.95);
-    if (customPlayed) {
-      return;
-    }
-
-    // Synthesized welcome sequence: Warm harmonic chime + spoken "Welcome to Flick"
-    try {
+    const played = await this.playCustomAudioFile(OPTIMUS_SOUNDS.welcome, 0.95);
+    if (!played) {
       playSound("auth_success");
-    } catch {}
-
-    if ("speechSynthesis" in window) {
-      await this.speak("Welcome to Flick");
-    } else {
-      // Allow chime to resonate
-      await new Promise((r) => setTimeout(r, 1400));
     }
   }
 
   /**
-   * Dedicated sound effect for Flick News Wire pushes.
-   * Plays the custom news-wire-push audio file (/sounds/news-wire-push.wav).
+   * Dedicated sound effect for Flick News Wire pushes:
+   * Plays Optimus Prime "News from the wire".
    */
   public async playNewsWirePushSound(volume = 0.95): Promise<boolean> {
-    if (typeof window === "undefined" || !soundEngine.isSoundEnabled()) return false;
-    const played = await this.playCustomAudioFile(SOUND_FILE_MAP.news, volume);
+    if (typeof window === "undefined" || !this.voiceEnabled) return false;
+    const played = await this.playCustomAudioFile(OPTIMUS_SOUNDS.news, volume);
     if (!played) {
       playSound("notification_chime");
       return false;
