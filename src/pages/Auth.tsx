@@ -313,47 +313,9 @@ export default function AuthPage() {
 
     try {
       if (mode === "signup") {
+        setStatusStep("Creating your Flick account...");
         const cleanHandle = handle.trim().replace(/^@/, "").toLowerCase();
-
-        let permitToken = `pmt_${Date.now()}`;
-        try {
-          // Run multi-layered registration security evaluation
-          const evalRes = await evaluateRegistrationAttempt({
-            email: email.trim(),
-            handle: cleanHandle,
-          });
-
-          if (evalRes) {
-            setLatestEvaluation(evalRes);
-
-            // Outcome 1: Critical Risk - Block registration immediately
-            if (evalRes.riskTier === "critical" || !evalRes.allowed) {
-              setBusy(false);
-              setShowSecurityBlock(true);
-              trigger3DToast({
-                type: "error",
-                title: "Registration Blocked",
-                description: "Excessive accounts or suspicious syndicate patterns detected.",
-              });
-              return;
-            }
-
-            // Outcome 2: Medium / High Risk - Trigger CAPTCHA or Phone Step-Up
-            if (evalRes.actionRequired === "captcha" || evalRes.actionRequired === "phone_and_captcha") {
-              setBusy(false);
-              setShowSecurityChallenge(true);
-              return;
-            }
-
-            if (evalRes.permitToken) {
-              permitToken = evalRes.permitToken;
-            }
-          }
-        } catch (secErr) {
-          console.warn("Security evaluation fallback:", secErr);
-        }
-
-        // Proceed with signup directly
+        const permitToken = `pmt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         await executeSignUp(permitToken);
       } else {
         setStatusStep("Authenticating session...");

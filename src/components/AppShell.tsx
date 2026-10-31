@@ -48,6 +48,7 @@ import { useLenis } from "@/lib/useLenis";
 import { initRealtimePushEngine, requestDesktopNotificationPermission } from "@/lib/realtimeNotifications";
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { RightRail } from "./layout/RightRail";
+import { PeepingFlickerMascot } from "./mascot/PeepingFlickerMascot";
 
 const tabs: { to: string; icon: typeof Home; label: string; center?: boolean; action?: boolean }[] = [
   { to: "/", icon: Home, label: "Home" },
@@ -713,6 +714,7 @@ export function AppShell() {
       />
       <FlickPostModal open={postModalOpen} onClose={() => setPostModalOpen(false)} />
       <GlobalAudioOverlay />
+      <PeepingFlickerMascot />
     </div>
   );
 }

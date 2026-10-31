@@ -118,24 +118,43 @@ export class WebRtcEngine {
     });
 
     this.signalingChannel
+      .on("broadcast", { event: "webrtc:request_offer" }, async ({ payload }) => {
+        // Broadcaster receives request from a viewer who just joined
+        if (isInitiator && payload?.viewerId) {
+          await this.createAndSendOffer(payload.viewerId);
+        }
+      })
       .on("broadcast", { event: "webrtc:offer" }, async ({ payload }) => {
-        if (payload.targetUserId && payload.targetUserId !== this.currentUserId) return;
-        await this.handleOffer(payload.sdp);
+        // Viewer receives offer from broadcaster
+        if (isInitiator) return; // Broadcaster ignores offers
+        if (payload?.targetUserId && payload.targetUserId !== this.currentUserId) return;
+        await this.handleOffer(payload.sdp, payload.senderId);
       })
       .on("broadcast", { event: "webrtc:answer" }, async ({ payload }) => {
-        if (payload.targetUserId && payload.targetUserId !== this.currentUserId) return;
+        // Broadcaster receives answer from viewer
+        if (!isInitiator) return;
+        if (payload?.targetUserId && payload.targetUserId !== this.currentUserId) return;
         await this.handleAnswer(payload.sdp);
       })
       .on("broadcast", { event: "webrtc:candidate" }, async ({ payload }) => {
-        if (payload.targetUserId && payload.targetUserId !== this.currentUserId) return;
-        if (payload.candidate) {
+        if (payload?.targetUserId && payload.targetUserId !== this.currentUserId) return;
+        if (payload?.candidate) {
           await this.handleCandidate(payload.candidate);
         }
       })
       .subscribe(async (status) => {
-        if (status === "SUBSCRIBED" && isInitiator) {
-          // If initiator, send offer
-          await this.createAndSendOffer();
+        if (status === "SUBSCRIBED") {
+          if (isInitiator) {
+            // Broadcaster announces offer ready
+            await this.createAndSendOffer();
+          } else {
+            // Viewer immediately requests offer from broadcaster
+            await this.signalingChannel?.send({
+              type: "broadcast",
+              event: "webrtc:request_offer",
+              payload: { viewerId: this.currentUserId },
+            });
+          }
         }
       });
   }
@@ -180,32 +199,40 @@ export class WebRtcEngine {
     };
   }
 
-  private async createAndSendOffer(): Promise<void> {
+  private async createAndSendOffer(targetUserId?: string): Promise<void> {
     if (!this.peerConnection || !this.signalingChannel) return;
-    const offer = await this.peerConnection.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
-    });
-    await this.peerConnection.setLocalDescription(offer);
+    try {
+      const offer = await this.peerConnection.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      await this.peerConnection.setLocalDescription(offer);
 
-    await this.signalingChannel.send({
-      type: "broadcast",
-      event: "webrtc:offer",
-      payload: { sdp: offer, senderId: this.currentUserId },
-    });
+      await this.signalingChannel.send({
+        type: "broadcast",
+        event: "webrtc:offer",
+        payload: { sdp: offer, senderId: this.currentUserId, targetUserId },
+      });
+    } catch (err) {
+      console.warn("createAndSendOffer notice:", err);
+    }
   }
 
-  private async handleOffer(sdp: RTCSessionDescriptionInit): Promise<void> {
+  private async handleOffer(sdp: RTCSessionDescriptionInit, broadcasterId?: string): Promise<void> {
     if (!this.peerConnection || !this.signalingChannel) return;
-    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-    const answer = await this.peerConnection.createAnswer();
-    await this.peerConnection.setLocalDescription(answer);
+    try {
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
 
-    await this.signalingChannel.send({
-      type: "broadcast",
-      event: "webrtc:answer",
-      payload: { sdp: answer, senderId: this.currentUserId },
-    });
+      await this.signalingChannel.send({
+        type: "broadcast",
+        event: "webrtc:answer",
+        payload: { sdp: answer, senderId: this.currentUserId, targetUserId: broadcasterId },
+      });
+    } catch (err) {
+      console.warn("handleOffer notice:", err);
+    }
   }
 
   private async handleAnswer(sdp: RTCSessionDescriptionInit): Promise<void> {

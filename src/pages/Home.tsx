@@ -31,6 +31,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { getFollowedUserIds, followUser, unfollowUser, FOLLOWING_EVENT } from "@/lib/follow";
 import { toast } from "sonner";
+import { LiveWatchView } from "@/components/space/LiveWatchView";
+import type { LiveBroadcastSession } from "@/lib/space/types";
 
 const CHIPS = ["Following", "For You", "Trending", "Recent"] as const;
 
@@ -47,6 +49,7 @@ export default function HomePage() {
   });
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [viewer, setViewer] = useState<{ groups: StoryGroup[]; index: number } | null>(null);
+  const [watchingLiveSession, setWatchingLiveSession] = useState<LiveBroadcastSession | null>(null);
   const [chip, setChip] = useState<typeof CHIPS[number]>("For You");
   const [query, setQuery] = useState("");
   const [people, setPeople] = useState<{ id: string; handle: string; display_name: string; avatar_url: string | null }[]>([]);
@@ -338,7 +341,12 @@ export default function HomePage() {
       </AnimatePresence>
 
       {/* Stories Bar at top */}
-      {!searching && <StoriesBar onView={(groups, index) => setViewer({ groups, index })} />}
+      {!searching && (
+        <StoriesBar
+          onView={(groups, index) => setViewer({ groups, index })}
+          onWatchLive={(live) => setWatchingLiveSession(live)}
+        />
+      )}
 
       {/* Top Flickers Hall of Fame */}
       {!searching && <TopFlickersBar />}
@@ -610,6 +618,13 @@ export default function HomePage() {
       </section>
 
       <StoryViewer groups={viewer?.groups ?? null} startIndex={viewer?.index ?? 0} onClose={() => setViewer(null)} />
+
+      {watchingLiveSession && (
+        <LiveWatchView
+          session={watchingLiveSession}
+          onClose={() => setWatchingLiveSession(null)}
+        />
+      )}
     </>
   );
 }

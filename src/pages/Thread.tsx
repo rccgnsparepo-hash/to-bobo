@@ -30,6 +30,7 @@ import {
   Trash2,
   Copy,
   ExternalLink,
+  Radio,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -43,6 +44,9 @@ import { ActiveCallModal, type CallType } from "@/components/chat/ActiveCallModa
 import { MicPermissionModal } from "@/components/chat/MicPermissionModal";
 import { QuickRepliesBar } from "@/components/chat/QuickRepliesBar";
 import { MediaViewerModal } from "@/components/chat/MediaViewerModal";
+import { SpaceService } from "@/lib/space/spaceService";
+import { LiveWatchView } from "@/components/space/LiveWatchView";
+import type { LiveBroadcastSession } from "@/lib/space/types";
 import { FashionLookCard } from "@/components/chat/FashionLookCard";
 import { downloadMedia } from "@/lib/downloadMedia";
 import {
@@ -168,7 +172,24 @@ export default function ThreadPage() {
     return Date.now() - new Date(latestFromPeer.created_at).getTime() < 120000;
   }, [msgs, userId]);
 
-  const effectiveOnline = peerTyping || isOnline || hasRecentMessage;
+  const [watchingLiveModal, setWatchingLiveModal] = useState<LiveBroadcastSession | null>(null);
+  const [, setLiveTick] = useState(0);
+
+  useEffect(() => {
+    const onLiveSync = () => setLiveTick((t) => t + 1);
+    window.addEventListener("flick:space-live-updated", onLiveSync);
+    window.addEventListener("flick:space-rooms-updated", onLiveSync);
+    return () => {
+      window.removeEventListener("flick:space-live-updated", onLiveSync);
+      window.removeEventListener("flick:space-rooms-updated", onLiveSync);
+    };
+  }, []);
+
+  const isPeerLive = userId ? SpaceService.isUserLive(userId) : false;
+  const peerLiveSession = userId ? SpaceService.getUserLiveSession(userId) : null;
+  const peerRoom = userId ? SpaceService.getUserAudioRoom(userId) : null;
+
+  const effectiveOnline = isPeerLive || peerTyping || isOnline || hasRecentMessage;
   const typingRoomId = useMemo(() => (user && userId ? [user.id, userId].sort().join(":") : null), [user, userId]);
 
   const emitTypingSignal = (isTyping: boolean) => {
@@ -208,33 +229,6 @@ export default function ThreadPage() {
 
   const load = async (shouldScroll = true) => {
     if (!user || !userId) return;
-    if (userId === "my-ai") {
-      const stored = localStorage.getItem(`flick:my_ai_msgs_${user.id}`);
-      if (stored) {
-        try {
-          setMsgs(JSON.parse(stored));
-          if (shouldScroll) {
-            setTimeout(() => scrollToBottom(true), 30);
-          }
-          return;
-        } catch {}
-      }
-      const welcomeMsg: Msg = {
-        id: "my-ai-welcome",
-        sender_id: "my-ai",
-        recipient_id: user.id,
-        content: "Hey! I'm your Flick AI companion. Ask me anything, plan ideas, or get fashion & snap tips! ✨",
-        media_url: null,
-        media_type: null,
-        created_at: new Date().toISOString(),
-        expires_at: null,
-        read_at: new Date().toISOString(),
-        reply_to_id: null,
-        reply_snippet: null,
-      };
-      setMsgs([welcomeMsg]);
-      return;
-    }
     const now = new Date().toISOString();
     const { data } = await supabase
       .from("messages")
@@ -275,15 +269,6 @@ export default function ThreadPage() {
 
   useEffect(() => {
     if (!userId) return;
-    if (userId === "my-ai") {
-      setOther({
-        id: "my-ai",
-        handle: "myai",
-        display_name: "My AI ✨",
-        avatar_url: "/bitmoji/cyber-vibe.png",
-      });
-      return;
-    }
     supabase
       .from("profiles")
       .select("*")
@@ -526,42 +511,6 @@ export default function ThreadPage() {
       reply_snippet,
     };
     setMsgs((rows) => [...rows, optimistic]);
-    if (userId === "my-ai") {
-      const next = [...msgs, optimistic];
-      localStorage.setItem(`flick:my_ai_msgs_${user.id}`, JSON.stringify(next));
-      setPeerTyping(true);
-      setTimeout(() => {
-        setPeerTyping(false);
-        const aiReplies = [
-          "Love that idea! Let's get creative on Flick! ✨",
-          "That sounds awesome! Have you tried posting a story with the cash flow filter?",
-          "I'm here for it! Drop a snap or check out what's trending on the home feed 🔥",
-          "Haha totally! Keep that streak going! ⚡",
-          "That's so cool! You should definitely flick that to your friends 📸",
-          "Always here to chat! What are you working on today?",
-        ];
-        const replyText = aiReplies[Math.floor(Math.random() * aiReplies.length)];
-        const aiMsg: Msg = {
-          id: `ai-${Date.now()}`,
-          sender_id: "my-ai",
-          recipient_id: user.id,
-          content: replyText,
-          media_url: null,
-          media_type: null,
-          created_at: new Date().toISOString(),
-          expires_at: null,
-          read_at: null,
-          reply_to_id: optimistic.id,
-          reply_snippet: optimistic.content?.slice(0, 80) || null,
-        };
-        setMsgs((prev) => {
-          const updated = [...prev, aiMsg];
-          localStorage.setItem(`flick:my_ai_msgs_${user.id}`, JSON.stringify(updated));
-          return updated;
-        });
-      }, 1200);
-      return;
-    }
     const { data, error } = await supabase
       .from("messages")
       .insert({
@@ -1231,6 +1180,16 @@ export default function ThreadPage() {
                     </span>
                     typing…
                   </span>
+                ) : isPeerLive ? (
+                  <span className="text-rose-500 font-bold flex items-center gap-1 animate-pulse">
+                    <Radio className="w-2.5 h-2.5" />
+                    LIVE ON SPACE
+                  </span>
+                ) : peerRoom ? (
+                  <span className="text-purple-400 font-bold flex items-center gap-1">
+                    <Mic className="w-2.5 h-2.5 text-[#C5E863]" />
+                    IN AUDIO ROOM
+                  </span>
                 ) : effectiveOnline ? (
                   <span className="text-emerald-400 font-medium flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -1376,10 +1335,48 @@ export default function ThreadPage() {
           >
             <Settings2 className="w-4 h-4" />
           </button>
-        </div>
       </header>
 
-      {/* In-chat search bar */}
+      {/* Peer Live Stream Alert Banner */}
+      {isPeerLive && peerLiveSession && (
+        <div className="bg-rose-500/15 border-b border-rose-500/30 px-3.5 py-2 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md z-10 animate-fadeIn">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+            <div className="text-xs truncate">
+              <span className="font-bold text-rose-400">{other?.display_name || "User"}</span>
+              <span className="text-zinc-200 ml-1.5 font-normal truncate">is broadcasting live: "{peerLiveSession.title}"</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWatchingLiveModal(peerLiveSession)}
+            className="px-3 py-1 rounded-full bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+          >
+            <Radio className="w-3 h-3 animate-pulse" />
+            <span>Watch Live</span>
+          </button>
+        </div>
+      )}
+
+      {/* Peer Audio Room Alert Banner */}
+      {!isPeerLive && peerRoom && (
+        <div className="bg-purple-500/15 border-b border-purple-500/30 px-3.5 py-2 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md z-10 animate-fadeIn">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse shrink-0" />
+            <div className="text-xs truncate">
+              <span className="font-bold text-purple-400">{other?.display_name || "User"}</span>
+              <span className="text-zinc-200 ml-1.5 font-normal truncate">is in Audio Room: "{peerRoom.title}"</span>
+            </div>
+          </div>
+          <Link
+            to="/space?tab=rooms"
+            className="px-3 py-1 rounded-full bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shrink-0"
+          >
+            <Mic className="w-3 h-3 text-[#C5E863]" />
+            <span>Join Room</span>
+          </Link>
+        </div>
+      )}
       <AnimatePresence>
         {showSearch && (
           <motion.div
@@ -2279,6 +2276,13 @@ export default function ThreadPage() {
         senderName={mediaModal?.senderName}
         timestamp={mediaModal?.timestamp}
       />
+
+      {watchingLiveModal && (
+        <LiveWatchView
+          session={watchingLiveModal}
+          onClose={() => setWatchingLiveModal(null)}
+        />
+      )}
     </div>
   );
 }

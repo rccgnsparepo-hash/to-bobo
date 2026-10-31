@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar } from "@/components/Avatar";
 import { PostCard, type PostRow } from "@/components/PostCard";
-import { ArrowLeft, MessageCircle, UserPlus, Check, Swords } from "lucide-react";
+import { ArrowLeft, MessageCircle, UserPlus, Check, Swords, Radio, Mic } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import {
@@ -20,6 +20,9 @@ import { isUserVerified } from "@/lib/verification";
 import { ProfileCover } from "@/components/profile/ProfileCover";
 import { UserListModal } from "@/components/profile/UserListModal";
 import { DuelModal } from "@/components/duel/DuelModal";
+import { SpaceService } from "@/lib/space/spaceService";
+import { LiveWatchView } from "@/components/space/LiveWatchView";
+import type { LiveBroadcastSession } from "@/lib/space/types";
 
 type Profile = { id: string; handle: string; display_name: string; avatar_url: string | null; bio: string | null };
 
@@ -36,6 +39,22 @@ export default function UserProfilePage() {
     title: string;
   }>({ open: false, type: "flickers", title: "Flickers" });
   const [duelOpen, setDuelOpen] = useState(false);
+  const [watchingLiveModal, setWatchingLiveModal] = useState<LiveBroadcastSession | null>(null);
+  const [, setLiveTick] = useState(0);
+
+  useEffect(() => {
+    const onLiveSync = () => setLiveTick((t) => t + 1);
+    window.addEventListener("flick:space-live-updated", onLiveSync);
+    window.addEventListener("flick:space-rooms-updated", onLiveSync);
+    return () => {
+      window.removeEventListener("flick:space-live-updated", onLiveSync);
+      window.removeEventListener("flick:space-rooms-updated", onLiveSync);
+    };
+  }, []);
+
+  const isLive = p ? SpaceService.isUserLive(p.id) : false;
+  const userLiveSession = p ? SpaceService.getUserLiveSession(p.id) : null;
+  const userRoom = p ? SpaceService.getUserAudioRoom(p.id) : null;
 
   useEffect(() => {
     if (!user || !p) return;
@@ -144,10 +163,15 @@ export default function UserProfilePage() {
       {/* Profile Info Header */}
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-5 pt-0 pb-4">
         <div className="flex items-end justify-between -mt-14 sm:-mt-16 mb-4">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-background ring-4 ring-background shadow-2xl">
+          <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-background ring-4 ${isLive ? "ring-rose-500 animate-pulse" : "ring-background"} shadow-2xl relative`}>
             <div className="w-full h-full rounded-full overflow-hidden bg-secondary">
               <Avatar url={p.avatar_url} name={p.display_name} size={112} />
             </div>
+            {isLive && (
+              <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-rose-600 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1 uppercase tracking-wider shadow-md border border-white/20 whitespace-nowrap">
+                <Radio className="w-2.5 h-2.5 animate-pulse" /> LIVE NOW
+              </span>
+            )}
           </div>
         </div>
 
@@ -156,6 +180,11 @@ export default function UserProfilePage() {
             <div className="font-display text-2xl font-bold truncate flex items-center gap-2">
               <span>{p.display_name}</span>
               {isUserVerified(p.id) && <FlickVerifiedBadge size={20} />}
+              {isLive && (
+                <span className="text-xs bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Radio className="w-3 h-3 animate-pulse" /> Live
+                </span>
+              )}
             </div>
             <div className="text-xs text-muted-foreground">@{p.handle}</div>
           </div>
@@ -205,6 +234,49 @@ export default function UserProfilePage() {
           </div>
         </div>
       </motion.section>
+
+      {/* Live Stream / Audio Room Banner CTAs */}
+      {isLive && userLiveSession && (
+        <div className="px-5 mb-2.5">
+          <button
+            type="button"
+            onClick={() => setWatchingLiveModal(userLiveSession)}
+            className="w-full bg-gradient-to-r from-rose-600 via-red-600 to-amber-500 hover:opacity-95 active:scale-98 text-white font-extrabold py-3 px-4 rounded-2xl text-sm flex items-center justify-between shadow-lg shadow-rose-950/30 transition animate-pulse cursor-pointer border border-white/20"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-3 h-3 rounded-full bg-white animate-ping" />
+              <div className="text-left truncate">
+                <div className="text-xs uppercase tracking-wider font-mono opacity-90">Live Broadcast Now</div>
+                <div className="font-bold text-sm truncate">{userLiveSession.title}</div>
+              </div>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-black/30 text-white font-bold text-xs shrink-0 flex items-center gap-1">
+              <Radio className="w-3 h-3" />
+              Watch 🔴
+            </span>
+          </button>
+        </div>
+      )}
+
+      {!isLive && userRoom && (
+        <div className="px-5 mb-2.5">
+          <Link
+            to="/space?tab=rooms"
+            className="w-full bg-gradient-to-r from-purple-700 to-indigo-600 hover:opacity-95 active:scale-98 text-white font-bold py-3 px-4 rounded-2xl text-sm flex items-center justify-between shadow-md transition border border-white/10"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Mic className="w-4 h-4 text-[#C5E863]" />
+              <div className="text-left truncate">
+                <div className="text-xs uppercase tracking-wider font-mono text-purple-200">In Audio Room</div>
+                <div className="font-bold text-sm truncate">{userRoom.title}</div>
+              </div>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-black/30 text-[#C5E863] font-bold text-xs shrink-0">
+              Join 🎙️
+            </span>
+          </Link>
+        </div>
+      )}
 
       {/* Action Buttons: Flick / Message */}
       <div className="px-5 flex gap-2">
@@ -289,6 +361,13 @@ export default function UserProfilePage() {
             badgeColor: "from-red-500 to-amber-500",
             haloColor: "rgba(239, 68, 68, 0.4)",
           }}
+        />
+      )}
+
+      {watchingLiveModal && (
+        <LiveWatchView
+          session={watchingLiveModal}
+          onClose={() => setWatchingLiveModal(null)}
         />
       )}
     </>
