@@ -100,14 +100,14 @@ export function StoriesBar({
 
   return (
     <div className="flex gap-3 overflow-x-auto px-4 py-4 no-scrollbar border-b border-border">
-      {/* What's Flickering / Create Story / Post */}
+      {/* What's Flickering / Post to Story */}
       <button
         type="button"
         onClick={() => {
-          window.dispatchEvent(new CustomEvent("flick:open-composer"));
+          navigate("/stories/new");
         }}
         className="flex flex-col items-center gap-1.5 shrink-0 group text-left cursor-pointer"
-        title="What's flickering? (Create Post)"
+        title="What's flickering? (Post to Story)"
       >
         <div className="w-16 h-16 rounded-full bg-secondary border border-dashed border-[#C5E863] grid place-items-center group-hover:bg-[#C5E863]/10 transition shadow-xs">
           <Plus className="w-6 h-6 text-[#C5E863] group-hover:scale-110 transition-transform" />

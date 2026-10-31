@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<title>Flick Class</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0a;--surf:#141417;--surf2:#202026;--line:#2a2a32;--fg:#f3f3f6;--mute:#9a9aa8;--ac:#4a5cff;--live:#ff4f8b;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f4f7;--surf:#fff;--surf2:#ececf1;--line:#d9d9e2;--fg:#14141a;--mute:#62626f;color-scheme:light}}
+:root[data-theme="dark"]{--bg:#0a0a0a;--surf:#141417;--surf2:#202026;--line:#2a2a32;--fg:#f3f3f6;--mute:#9a9aa8}
+*,*:before,*:after{box-sizing:border-box;margin:0}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;background:var(--bg);color:var(--fg);font:400 15px/1.45 'Bricolage Grotesque',system-ui,sans-serif;overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* entrance */
+.gate{position:fixed;inset:0;background:#0a0a0a;color:#f3f3f6;display:grid;place-items:center;text-align:center;z-index:1;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+.gate canvas{position:absolute;inset:0;width:100%;height:100%}
+.gin{position:relative;padding:24px;transition:transform 1.1s cubic-bezier(.6,0,.9,.4),filter 1.1s,opacity 1s}
+.go .gin{transform:scale(7);filter:blur(14px);opacity:0;pointer-events:none}
+h1{font-size:clamp(60px,17vw,190px);line-height:.88;font-weight:800;font-stretch:75%;letter-spacing:-.03em}
+.gate p{max-width:32ch;margin:20px auto 30px;color:#a9a9b8;font-size:17px}
+.enter{background:#f3f3f6;color:#0a0a0a;border:0;border-radius:99px;padding:15px 30px;font-weight:700;font-size:16px}
+
+/* app */
+.app{position:fixed;inset:0;z-index:2;background:var(--bg);padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);clip-path:circle(0 at var(--x,50%) var(--y,60%));transition:clip-path 1.3s cubic-bezier(.7,0,.2,1)}
+.app.open{clip-path:circle(160vmax at var(--x,50%) var(--y,60%))}
+.shell{height:100%;display:grid;grid-template-rows:auto 1fr;transform:scale(1.14);filter:blur(10px);transition:transform 1.4s cubic-bezier(.2,.7,.2,1),filter 1.2s}
+.open .shell{transform:none;filter:none}
+.top{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.brand{font-weight:800;font-stretch:75%;font-size:24px;letter-spacing:-.02em}
+.room{color:var(--mute);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live{display:flex;gap:7px;align-items:center;color:var(--live);font-weight:600;font-variant-numeric:tabular-nums}
+.live:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--live);animation:pulse 1.4s infinite}
+.seg{display:flex;background:var(--surf2);border-radius:99px;padding:3px}
+.seg button{border:0;background:none;color:var(--mute);padding:6px 13px;border-radius:99px;font-weight:600;font-size:13px}
+.seg [aria-pressed=true]{background:var(--ac);color:#fff}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px 18px;min-height:0;overflow:auto}
+@media (max-width:860px){.main{grid-template-columns:1fr}.room{display:none}}
+.stage{display:flex;flex-direction:column;gap:12px;min-width:0}
+.slide{aspect-ratio:16/9;container-type:inline-size;background:linear-gradient(135deg,#1a1f4d,#0f0f14 62%);border:1px solid var(--line);border-radius:18px;overflow:hidden;color:#f3f3f6}
+.sl{height:100%;padding:6cqw;display:flex;flex-direction:column;justify-content:center;gap:2.4cqw;animation:swap .45s cubic-bezier(.2,.7,.2,1)}
+.sl h2{font-size:8.5cqw;line-height:.95;font-weight:800;font-stretch:75%;letter-spacing:-.02em}
+.sl p{font-size:2.8cqw;max-width:34ch;color:#b9bbd6}
+.q{display:flex;gap:1.4cqw;margin-top:1cqw}
+.q i{width:8cqw;height:8cqw;border-radius:1.2cqw;display:grid;place-items:center;font:700 3.2cqw 'Bricolage Grotesque',sans-serif;background:#4a5cff;color:#fff}
+.q i:first-child{background:#ff4f8b}
+.cap{display:flex;justify-content:space-between;font-size:2.4cqw;color:#b9bbd6;max-width:48cqw}
+.sl ul{list-style:none;padding:0;font-size:4.4cqw;font-weight:700;display:grid;gap:1.2cqw}
+.rail{display:flex;gap:8px;overflow:auto;padding-bottom:2px}
+.th{flex:1 0 auto;min-width:118px;text-align:left;padding:9px 12px;border-radius:12px;background:var(--surf);border:1px solid var(--line);color:var(--mute);font-size:13px;font-weight:600}
+.th[aria-current=true]{border-color:var(--ac);color:var(--fg)}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp{flex:1;color:var(--mute);font-size:13px}
+.b{border:1px solid var(--line);background:var(--surf);padding:8px 15px;border-radius:99px;font-weight:600;font-size:14px}
+.b:disabled{opacity:.4;cursor:default}
+.b.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:18px;padding:14px}
+h3{font-size:15px;font-weight:700;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ppl{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.p{text-align:center;font-size:12px;color:var(--mute)}
+.av{width:52px;height:52px;border-radius:50%;margin:0 auto 5px;display:grid;place-items:center;font-weight:700;color:#fff;transition:box-shadow .25s}
+.p.talk .av{box-shadow:0 0 0 3px var(--surf),0 0 0 6px var(--live)}
+.mic{display:flex;align-items:center;gap:12px;margin-top:14px}
+.bars{display:flex;gap:3px;align-items:center;height:26px}
+.bars i{width:4px;height:4px;border-radius:2px;background:var(--live);transition:height .12s}
+.pad,textarea{display:block;font:400 22px/1.3 'Instrument Serif',Georgia,serif;width:100%;height:230px;overflow:auto;background:transparent;border:0;color:var(--fg);resize:none;outline:none;white-space:pre-wrap}
+.pad.on:after{content:"";display:inline-block;width:2px;height:1.05em;background:var(--ac);margin-left:2px;vertical-align:-3px;animation:blink 1s steps(2) infinite}
+.ty{color:var(--mute);font-size:12px;font-weight:500}
+@keyframes pulse{50%{opacity:.3}}
+@keyframes blink{50%{opacity:0}}
+@keyframes swap{from{opacity:0;transform:translateX(3cqw)}}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="gate" id="gate">
+  <canvas id="warp" aria-hidden="true"></canvas>
+  <div class="gin">
+    <h1>Flick Class</h1>
+    <p>Slides, live voice and your lecturer’s notes, in one room.</p>
+    <button class="enter" id="enter">Enter the room</button>
+  </div>
+</div>
+
+<div class="app" id="app" inert>
+  <div class="shell">
+    <header class="top">
+      <span class="brand">Flick</span>
+      <span class="room">Data structures, week 6</span>
+      <span class="live" id="clock">12:04</span>
+      <div class="seg" role="group" aria-label="Your role">
+        <button id="rS" aria-pressed="true">Student</button>
+        <button id="rL" aria-pressed="false">Lecturer</button>
+      </div>
+    </header>
+    <div class="main">
+      <section class="stage" aria-label="Slides">
+        <div class="slide"><div class="sl" id="sl"></div></div>
+        <div class="rail" id="rail"></div>
+        <div class="ctl">
+          <button class="b" id="prev">Back</button>
+          <button class="b" id="next">Next</button>
+          <span class="sp" id="status"></span>
+          <button class="b pri" id="jump" hidden>Jump to lecturer’s slide</button>
+        </div>
+      </section>
+      <aside class="side">
+        <div class="card">
+          <h3>In the room <span class="ty" id="count">6 here</span></h3>
+          <div class="ppl" id="ppl"></div>
+          <div class="mic">
+            <button class="b" id="mic" aria-pressed="false">Join voice</button>
+            <div class="bars" id="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span id="padT">Dr. Adeyemi’s notes</span> <span class="ty" id="ty"></span></h3>
+          <div class="pad" id="pad" aria-live="off"></div>
+          <textarea id="ta" hidden placeholder="Type here. Students see every keystroke." aria-label="Your live notes"></textarea>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* warp tunnel */
+const cv=$('#warp'),cx=cv.getContext('2d');
+let W,H,stars=[],speed=.6,target=.6,alive=true;
+function size(){W=cv.width=innerWidth;H=cv.height=innerHeight}
+size();addEventListener('resize',size);
+for(let i=0;i<320;i++)stars.push({x:(Math.random()-.5)*2*innerWidth,y:(Math.random()-.5)*2*innerHeight,z:Math.random()*innerWidth});
+function frame(){
+  if(!alive)return;
+  speed+=(target-speed)*.06;
+  cx.fillStyle='rgba(10,10,10,'+(speed>6?.22:.7)+')';cx.fillRect(0,0,W,H);
+  for(const s of stars){
+    const pz=s.z;s.z-=speed;
+    if(s.z<1){s.x=(Math.random()-.5)*2*W;s.y=(Math.random()-.5)*2*H;s.z=pz=W}
+    const k=W/2,x=s.x/s.z*k+W/2,y=s.y/s.z*k+H/2,px=s.x/(s.z+speed*1.6)*k+W/2,py=s.y/(s.z+speed*1.6)*k+H/2;
+    const t=1-s.z/W;
+    cx.strokeStyle=t>.7?'#9fb0ff':'rgba(243,243,246,'+(.25+t)+')';
+    cx.lineWidth=t*2.6+.3;cx.beginPath();cx.moveTo(px,py);cx.lineTo(x,y);cx.stroke();
+  }
+  requestAnimationFrame(frame);
+}
+if(!reduced)frame();
+
+$('#enter').onclick=e=>{
+  const r=e.currentTarget.getBoundingClientRect(),app=$('#app');
+  app.style.setProperty('--x',(r.left+r.width/2)+'px');app.style.setProperty('--y',(r.top+r.height/2)+'px');
+  $('#gate').classList.add('go');target=70;
+  setTimeout(()=>{app.classList.add('open');app.removeAttribute('inert')},reduced?0:1000);
+  setTimeout(()=>{alive=false;$('#gate').remove();$('#next').focus()},reduced?50:2500);
+};
+
+/* classroom */
+const slides=[
+ {t:'Queues',s:'First in, first out. The oldest item is always served next.',v:'q'},
+ {t:'Two moves',s:'Enqueue joins at the back. Dequeue leaves from the front.',v:'c'},
+ {t:'You already use them',s:'',v:'l'},
+ {t:'Your turn',s:'What happens if the line never moves?',v:''}];
+const script=[
+ 'A queue is a line. First in, first out.',
+ 'Enqueue joins the back. Dequeue serves the front. Nobody skips.',
+ 'Printers, ticket desks, message delivery. Even this chat.',
+ 'Question for you: what happens if the line never moves?'];
+const people=[['Dr. Adeyemi','#4a5cff'],['Mira','#0f9d8a'],['Tobi','#c2410c'],['Sam','#7c3aed'],['Lena','#be185d'],['You','#52525b']];
+let role='student',lead=0,view=0,text='',remote=0,lastType=0,micOn=false,secs=724;
+const ap={l:0,c:0,w:0};
+
+$('#ppl').innerHTML=people.map(p=>`<div class="p"><div class="av" style="background:${p[1]}">${p[0][0]}</div>${p[0]}</div>`).join('');
+$('#rail').innerHTML=slides.map((d,i)=>`<button class="th" data-i="${i}">${d.t}</button>`).join('');
+$('#rail').onclick=e=>{const b=e.target.closest('.th');if(b)go(+b.dataset.i)};
+
+function showSlide(){
+  const d=slides[view],q='<div class="q">'+'ABCDE'.split('').map(c=>`<i>${c}</i>`).join('')+'</div>';
+  let extra='';
+  if(d.v==='q')extra=q;
+  if(d.v==='c')extra=q+'<div class="cap"><span>front: dequeue</span><span>back: enqueue</span></div>';
+  if(d.v==='l')extra='<ul><li>Print jobs</li><li>Ticket desks</li><li>Message delivery</li></ul>';
+  $('#sl').innerHTML=`<h2>${d.t}</h2>${d.s?`<p>${d.s}</p>`:''}${extra}`;
+  document.querySelectorAll('.th').forEach((b,i)=>b.setAttribute('aria-current',i===view));
+  $('#prev').disabled=view===0;$('#next').disabled=view===slides.length-1;
+  const away=role==='student'&&view!==lead;
+  $('#jump').hidden=!away;
+  $('#status').textContent=role==='lecturer'?'You’re presenting. Students follow you.':away?'Browsing on your own':'Following Dr. Adeyemi';
+}
+function go(i){
+  view=Math.max(0,Math.min(slides.length-1,i));
+  if(role==='lecturer'){lead=view;post({t:'s',i:lead})}
+  showSlide();
+}
+$('#prev').onclick=()=>go(view-1);
+$('#next').onclick=()=>go(view+1);
+$('#jump').onclick=()=>{view=lead;showSlide()};
+
+function setText(v){text=v;lastType=Date.now();const p=$('#pad');p.textContent=v;p.scrollTop=p.scrollHeight}
+$('#ta').oninput=e=>{text=e.target.value;lastType=Date.now();post({t:'x',v:text})};
+
+function setRole(r){
+  role=r;$('#rS').setAttribute('aria-pressed',r==='student');$('#rL').setAttribute('aria-pressed',r==='lecturer');
+  const L=r==='lecturer';$('#ta').hidden=!L;$('#pad').hidden=L;
+  $('#padT').textContent=L?'Your notes':'Dr. Adeyemi’s notes';
+  if(L){$('#ta').value=text;$('#ta').focus()}else{$('#pad').textContent=text}
+  showSlide();
+}
+$('#rS').onclick=()=>setRole('student');
+$('#rL').onclick=()=>setRole('lecturer');
+
+/* live sync between tabs in this browser */
+let bc=null;try{bc=new BroadcastChannel('flick-class')}catch(e){}
+function post(m){try{bc&&bc.postMessage(m)}catch(e){}}
+if(bc)bc.onmessage=e=>{
+  const m=e.data;
+  if(m.t==='hello'&&role==='lecturer'){post({t:'s',i:lead});post({t:'x',v:text})}
+  if(role!=='student')return;
+  if(m.t==='s'){remote=Date.now();const f=view===lead;lead=m.i;if(f)view=lead;showSlide()}
+  if(m.t==='x'){remote=Date.now();setText(m.v)}
+};
+post({t:'hello'});
+
+/* demo lecturer: types on its own until a real lecturer tab speaks up */
+setInterval(()=>{
+  if(role!=='student'||Date.now()-remote<6000)return;
+  const L=script[ap.l];
+  if(ap.c<L.length){setText(text+L[ap.c++])}
+  else if(++ap.w>30){
+    ap.w=0;ap.c=0;ap.l=(ap.l+1)%slides.length;
+    if(ap.l===0)text='';
+    setText(ap.l===0?'':text+'\n\n');
+    const f=view===lead;lead=ap.l;if(f)view=lead;showSlide();
+  }
+},65);
+
+setInterval(()=>{
+  const typing=Date.now()-lastType<1200;
+  $('#ty').textContent=role==='student'?(typing?'typing…':''):'students see this live';
+  $('#pad').classList.toggle('on',typing);
+},250);
+
+/* voice */
+const ps=document.querySelectorAll('.p'),bars=[...document.querySelectorAll('#bars i')];
+$('#mic').onclick=e=>{micOn=!micOn;e.currentTarget.setAttribute('aria-pressed',micOn);e.currentTarget.textContent=micOn?'Mute':'Join voice';if(!micOn)bars.forEach(b=>b.style.height='4px')};
+setInterval(()=>{
+  ps.forEach(p=>p.classList.remove('talk'));
+  ps[Math.random()<.55?0:1+Math.floor(Math.random()*4)].classList.add('talk');
+  if(micOn)ps[5].classList.add('talk');
+},1600);
+setInterval(()=>{if(micOn)bars.forEach(b=>b.style.height=(4+Math.random()*22)+'px')},120);
+
+setInterval(()=>{secs++;$('#clock').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')},1000);
+showSlide();
+</script>
+</body>
+</html>

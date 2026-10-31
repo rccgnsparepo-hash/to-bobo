@@ -496,6 +496,7 @@ export default function MessagesPage() {
                 const isLive = SpaceService.isUserLive(p.id);
                 const liveSession = SpaceService.getUserLiveSession(p.id);
                 const userRoom = SpaceService.getUserAudioRoom(p.id);
+                const isOnline = isUserOnline(p.id);
 
                 const renderStatus = () => {
                   if (isLive && liveSession) {
