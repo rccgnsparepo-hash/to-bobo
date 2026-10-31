@@ -134,25 +134,30 @@ function wallpaperApiProxyPlugin() {
 }
 
 function registrationSecurityPlugin() {
+  const handler = async (req: any, res: any, next: any) => {
+    try {
+      const handled = await handleSecurityMiddleware(req, res);
+      if (!handled) {
+        next();
+      }
+    } catch (err) {
+      next(err);
+    }
+  };
+
   return {
     name: "registration-security-api",
     configureServer(server: any) {
-      server.middlewares.use(async (req: any, res: any, next: any) => {
-        try {
-          const handled = await handleSecurityMiddleware(req, res);
-          if (!handled) {
-            next();
-          }
-        } catch (err) {
-          next(err);
-        }
-      });
+      server.middlewares.use(handler);
+    },
+    configurePreviewServer(server: any) {
+      server.middlewares.use(handler);
     },
   };
 }
 
 export default defineConfig({
-  server: { host: "0.0.0.0", port: 3000, allowedHosts: true },
+  server: { host: "0.0.0.0", port: 3000, allowedHosts: true, hmr: false },
   plugins: [
     registrationSecurityPlugin(),
     wallpaperApiProxyPlugin(),

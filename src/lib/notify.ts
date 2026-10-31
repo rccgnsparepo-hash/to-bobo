@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 
 export type NotifyKind =

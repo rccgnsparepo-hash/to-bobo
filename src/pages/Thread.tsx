@@ -59,7 +59,7 @@ import {
   generateSyntheticVoiceNoteBlob,
   type MicErrorInfo,
 } from "@/lib/audioRecorder";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { useOnlinePresence, recordUserActivity } from "@/lib/presence";
 import { sendDmBroadcast } from "@/lib/dmBroadcast";
 import { triggerUndoToast } from "@/components/ui/InteractiveMorphToast";
@@ -208,6 +208,33 @@ export default function ThreadPage() {
 
   const load = async (shouldScroll = true) => {
     if (!user || !userId) return;
+    if (userId === "my-ai") {
+      const stored = localStorage.getItem(`flick:my_ai_msgs_${user.id}`);
+      if (stored) {
+        try {
+          setMsgs(JSON.parse(stored));
+          if (shouldScroll) {
+            setTimeout(() => scrollToBottom(true), 30);
+          }
+          return;
+        } catch {}
+      }
+      const welcomeMsg: Msg = {
+        id: "my-ai-welcome",
+        sender_id: "my-ai",
+        recipient_id: user.id,
+        content: "Hey! I'm your Flick AI companion. Ask me anything, plan ideas, or get fashion & snap tips! ✨",
+        media_url: null,
+        media_type: null,
+        created_at: new Date().toISOString(),
+        expires_at: null,
+        read_at: new Date().toISOString(),
+        reply_to_id: null,
+        reply_snippet: null,
+      };
+      setMsgs([welcomeMsg]);
+      return;
+    }
     const now = new Date().toISOString();
     const { data } = await supabase
       .from("messages")
@@ -248,6 +275,15 @@ export default function ThreadPage() {
 
   useEffect(() => {
     if (!userId) return;
+    if (userId === "my-ai") {
+      setOther({
+        id: "my-ai",
+        handle: "myai",
+        display_name: "My AI ✨",
+        avatar_url: "/bitmoji/cyber-vibe.png",
+      });
+      return;
+    }
     supabase
       .from("profiles")
       .select("*")
@@ -490,6 +526,42 @@ export default function ThreadPage() {
       reply_snippet,
     };
     setMsgs((rows) => [...rows, optimistic]);
+    if (userId === "my-ai") {
+      const next = [...msgs, optimistic];
+      localStorage.setItem(`flick:my_ai_msgs_${user.id}`, JSON.stringify(next));
+      setPeerTyping(true);
+      setTimeout(() => {
+        setPeerTyping(false);
+        const aiReplies = [
+          "Love that idea! Let's get creative on Flick! ✨",
+          "That sounds awesome! Have you tried posting a story with the cash flow filter?",
+          "I'm here for it! Drop a snap or check out what's trending on the home feed 🔥",
+          "Haha totally! Keep that streak going! ⚡",
+          "That's so cool! You should definitely flick that to your friends 📸",
+          "Always here to chat! What are you working on today?",
+        ];
+        const replyText = aiReplies[Math.floor(Math.random() * aiReplies.length)];
+        const aiMsg: Msg = {
+          id: `ai-${Date.now()}`,
+          sender_id: "my-ai",
+          recipient_id: user.id,
+          content: replyText,
+          media_url: null,
+          media_type: null,
+          created_at: new Date().toISOString(),
+          expires_at: null,
+          read_at: null,
+          reply_to_id: optimistic.id,
+          reply_snippet: optimistic.content?.slice(0, 80) || null,
+        };
+        setMsgs((prev) => {
+          const updated = [...prev, aiMsg];
+          localStorage.setItem(`flick:my_ai_msgs_${user.id}`, JSON.stringify(updated));
+          return updated;
+        });
+      }, 1200);
+      return;
+    }
     const { data, error } = await supabase
       .from("messages")
       .insert({

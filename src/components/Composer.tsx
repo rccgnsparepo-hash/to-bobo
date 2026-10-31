@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Avatar } from "./Avatar";
 import { UploadProgress, type UploadStage } from "./UploadProgress";
 import { notify } from "@/lib/notify";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import {
   getSupportedAudioMimeType,
   classifyMicError,

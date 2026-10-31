@@ -3,7 +3,7 @@ import { startUsageTracking } from "@/lib/usage";
 import { ScreenTimeLockout } from "./ScreenTimeLockout";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
-import { triggerNotchNotification } from "./notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { notificationAudio } from "@/lib/notificationAudio";
 import { initPresenceTracking, recordUserActivity } from "@/lib/presence";
 import { sendDesktopNotification, requestDesktopNotificationPermission, playNotificationChime } from "@/lib/realtimeNotifications";

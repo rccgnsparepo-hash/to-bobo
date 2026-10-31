@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { notify } from "@/lib/notify";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { UploadProgress, type UploadStage } from "@/components/UploadProgress";
 import { triggerLightHaptic, triggerSuccessHaptic } from "@/lib/haptics";
 import {

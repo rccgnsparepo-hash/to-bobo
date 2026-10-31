@@ -28,7 +28,7 @@ import { VoiceMessage } from "./VoiceMessage";
 import { PostActions } from "./PostActions";
 import { Link, useNavigate } from "react-router-dom";
 import { notify } from "@/lib/notify";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { toast } from "sonner";
 import { downloadMedia } from "@/lib/downloadMedia";
 import { playSound } from "@/lib/soundEngine";

@@ -9,6 +9,34 @@
   "bannedIdentifiers": [],
   "auditLog": [
     {
+      "id": "FLK-SEC-456B0F25",
+      "timestamp": "2026-10-30T21:27:37.703Z",
+      "ip": "127.0.0.1",
+      "email": "testuser@gmail.com",
+      "canonicalEmail": "testuser@gmail.com",
+      "handle": "testuser",
+      "deviceHash": "33b67ee052406ba3a5b6e46fcdb31b48",
+      "riskScore": 5,
+      "riskTier": "low",
+      "reasons": [],
+      "outcome": "permitted",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "id": "FLK-SEC-031998B2",
+      "timestamp": "2026-10-30T21:22:00.984Z",
+      "ip": "127.0.0.1",
+      "email": "test@example.com",
+      "canonicalEmail": "test@example.com",
+      "handle": "test",
+      "deviceHash": "33b67ee052406ba3a5b6e46fcdb31b48",
+      "riskScore": 5,
+      "riskTier": "low",
+      "reasons": [],
+      "outcome": "permitted",
+      "userAgent": "curl/7.88.1"
+    },
+    {
       "id": "FLK-SEC-74670AB8",
       "timestamp": "2026-10-30T08:25:28.871Z",
       "ip": "127.0.0.1",

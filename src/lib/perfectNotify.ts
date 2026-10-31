@@ -1,5 +1,5 @@
 import { notificationAudio } from "@/lib/notificationAudio";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { supabase } from "@/integrations/supabase/client";
 
 export type NotifyKind =

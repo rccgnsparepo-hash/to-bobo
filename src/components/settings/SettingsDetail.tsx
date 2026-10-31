@@ -38,7 +38,7 @@ import {
 } from "@/lib/usage";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { notificationAudio } from "@/lib/notificationAudio";
 import { soundEngine, playSound } from "@/lib/soundEngine";
 import { isOnlinePrivacyEnabled, setOnlinePrivacyEnabled } from "@/lib/presence";

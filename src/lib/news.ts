@@ -230,7 +230,7 @@ export function startNewsNotificationChannel(): () => void {
         return;
       }
 
-      const { triggerNotchNotification } = await import("@/components/notifications/NotchNotification");
+      const { triggerNotchNotification } = await import("@/lib/notchNotification");
       const { notificationAudio } = await import("@/lib/notificationAudio");
       void notificationAudio.playNewsWirePushSound(0.95);
 
@@ -272,7 +272,7 @@ export function startNewsNotificationChannel(): () => void {
 export async function triggerTestNewsPush(headline?: string): Promise<void> {
   const title =
     headline || "🏆 Super Eagles Star Victor Osimhen Nets Brilliant Brace in Thrilling Victory";
-  const { triggerNotchNotification } = await import("@/components/notifications/NotchNotification");
+  const { triggerNotchNotification } = await import("@/lib/notchNotification");
   const { notificationAudio } = await import("@/lib/notificationAudio");
 
   void notificationAudio.playNewsWirePushSound(1.0);

@@ -2,6 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Gracefully suppress Vite HMR / WebSocket transport warnings in sandboxed iframe environment
+      window.addEventListener(
+        "error",
+        function (e) {
+          var msg = (e && e.message) || "";
+          if (
+            msg.indexOf("send was called before connect") !== -1 ||
+            msg.indexOf("WebSocket") !== -1 ||
+            msg.indexOf("[vite]") !== -1
+          ) {
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (e.preventDefault) e.preventDefault();
+            return true;
+          }
+        },
+        true
+      );
+      window.addEventListener(
+        "unhandledrejection",
+        function (e) {
+          var reason = (e && e.reason && (e.reason.message || String(e.reason))) || "";
+          if (
+            reason.indexOf("send was called before connect") !== -1 ||
+            reason.indexOf("WebSocket") !== -1 ||
+            reason.indexOf("[vite]") !== -1
+          ) {
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (e.preventDefault) e.preventDefault();
+            return true;
+          }
+        },
+        true
+      );
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Flick — share moments, fast</title>
     <meta name="description" content="X-style timeline meets Snapchat-style stories, filters, and disappearing chats.">

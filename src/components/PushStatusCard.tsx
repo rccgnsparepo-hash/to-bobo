@@ -8,7 +8,7 @@ import {
   getStoredNotchStyle,
   setStoredNotchStyle,
   type NotchStyle,
-} from "@/components/notifications/NotchNotification";
+} from "@/lib/notchNotification";
 
 type Status = "unsupported" | "default" | "granted" | "denied";
 

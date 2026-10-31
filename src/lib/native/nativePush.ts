@@ -4,7 +4,7 @@ import { isNativePlatform } from "./platform";
 import { ensureNotificationChannels } from "./channels";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 
 let pushInitialized = false;
 

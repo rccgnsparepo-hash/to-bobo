@@ -27,7 +27,7 @@ import { dedupe, sectionize, priorityOf, type NotifRow } from "@/lib/notificatio
 import { useNotifPrefs, type NotifPrefs } from "@/lib/notifications/prefs";
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { toast } from "sonner";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 
 const readPerm = (): NotificationPermission => {
   if (typeof window !== "undefined" && localStorage.getItem("flick:push-enabled") === "true") {

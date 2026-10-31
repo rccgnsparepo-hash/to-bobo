@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { triggerNotchNotification } from "@/components/notifications/NotchNotification";
+import { triggerNotchNotification } from "@/lib/notchNotification";
 import { notificationAudio } from "@/lib/notificationAudio";
 import { soundEngine } from "@/lib/soundEngine";
 import { triggerLightHaptic } from "@/lib/haptics";
