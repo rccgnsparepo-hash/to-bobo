@@ -182,6 +182,57 @@ export function LiveBroadcastView({ onJoinAsViewer, onRequestGoLiveModal }: Prop
     }
   };
 
+  const handleResumeBroadcast = async (session: LiveBroadcastSession) => {
+    if (!user) return;
+    try {
+      void triggerMediumHaptic();
+      setCurrentSession(session);
+      setIsBroadcasting(true);
+      setViewerCount(session.viewerCount || 1);
+      setLikesCount(session.likesCount || 0);
+
+      if (rtcEngineRef.current) rtcEngineRef.current.close();
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+
+      const engine = new WebRtcEngine(user.id);
+      rtcEngineRef.current = engine;
+      const stream = await engine.startLocalMedia(camActive, micActive, facingMode);
+
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+        videoPreviewRef.current.play().catch(() => {});
+      }
+
+      const chName = `space:live:${session.id}`;
+      const rtcChannelName = `space:live:${session.id}:rtc`;
+      engine.initSignaling(rtcChannelName, true);
+
+      const ch = supabase
+        .channel(chName)
+        .on("broadcast", { event: "chat-message" }, ({ payload }) => {
+          setChatMessages((prev) => [...prev.slice(-40), payload as LiveChatMessage]);
+        })
+        .on("broadcast", { event: "reaction" }, ({ payload }) => {
+          const reaction = payload as LiveReaction;
+          setFloatingReactions((prev) => [...prev.slice(-15), reaction]);
+          setLikesCount((prev) => prev + 1);
+        })
+        .on("broadcast", { event: "viewer-count" }, ({ payload }) => {
+          if (payload?.count) setViewerCount(payload.count);
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            SpaceService.updateLiveStatus(session.id, "live");
+            toast.success("Resumed your LIVE Broadcast Studio! 🔴");
+          }
+        });
+
+      channelRef.current = ch;
+    } catch (err) {
+      toast.error(`Could not resume broadcast: ${(err as Error).message}`);
+    }
+  };
+
   const handleEndBroadcast = () => {
     if (!currentSession) return;
     void triggerMediumHaptic();
@@ -422,6 +473,51 @@ export function LiveBroadcastView({ onJoinAsViewer, onRequestGoLiveModal }: Prop
 
           {/* Active Live Broadcasts Grid */}
           <div className="space-y-4">
+            {/* If host has an active broadcast, show prominent resume banner */}
+            {activeSessions.find((s) => s.hostId === user?.id) && (
+              <div className="rounded-2xl p-4 bg-gradient-to-r from-rose-950/80 via-zinc-900 to-amber-950/40 border border-rose-500/50 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping absolute inset-0 m-auto" />
+                    <span className="w-3.5 h-3.5 rounded-full bg-rose-500 block relative" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>You have an active live broadcast:</span>
+                      <span className="text-rose-400">"{activeSessions.find((s) => s.hostId === user?.id)?.title}"</span>
+                    </p>
+                    <p className="text-[11px] text-zinc-400">
+                      {activeSessions.find((s) => s.hostId === user?.id)?.viewerCount || 1} people in stream · You are the Host
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => {
+                      const mine = activeSessions.find((s) => s.hostId === user?.id);
+                      if (mine) handleResumeBroadcast(mine);
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/30"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+                    <span>Resume Studio 🔴</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const mine = activeSessions.find((s) => s.hostId === user?.id);
+                      if (mine) {
+                        SpaceService.updateLiveStatus(mine.id, "ended");
+                        toast("Broadcast ended.");
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground text-xs font-semibold transition"
+                  >
+                    End Stream
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
@@ -455,69 +551,96 @@ export function LiveBroadcastView({ onJoinAsViewer, onRequestGoLiveModal }: Prop
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {activeSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="group rounded-3xl overflow-hidden bg-card border border-border shadow-sm hover:shadow-md transition flex flex-col justify-between"
-                  >
-                    {/* Live Preview Header */}
-                    <div className="relative aspect-video w-full bg-zinc-950 overflow-hidden flex items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-500 grid place-items-center animate-pulse">
-                        <Radio className="w-8 h-8" />
-                      </div>
+                {activeSessions.map((session) => {
+                  const isMyBroadcast = user?.id === session.hostId;
+                  return (
+                    <div
+                      key={session.id}
+                      className={`group rounded-3xl overflow-hidden transition flex flex-col justify-between ${
+                        isMyBroadcast
+                          ? "bg-rose-950/20 border-2 border-rose-500/60 shadow-lg shadow-rose-500/10"
+                          : "bg-card border border-border shadow-sm hover:shadow-md"
+                      }`}
+                    >
+                      {/* Live Preview Header */}
+                      <div className="relative aspect-video w-full bg-zinc-950 overflow-hidden flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-500 grid place-items-center animate-pulse">
+                          <Radio className="w-8 h-8" />
+                        </div>
 
-                      {/* Top Badges */}
-                      <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                        <span className="px-2.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
-                          LIVE
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-mono">
-                          {session.category}
-                        </span>
-                      </div>
+                        {/* Top Badges */}
+                        <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                            LIVE
+                          </span>
+                          {isMyBroadcast && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              YOUR BROADCAST
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-mono">
+                            {session.category}
+                          </span>
+                        </div>
 
-                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-mono flex items-center gap-1">
-                        <Users className="w-3 h-3 text-zinc-300" />
-                        <span>{session.viewerCount}</span>
-                      </div>
+                        <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-mono flex items-center gap-1">
+                          <Users className="w-3 h-3 text-zinc-300" />
+                          <span>{session.viewerCount}</span>
+                        </div>
 
-                      <div className="absolute bottom-3 inset-x-3 text-white">
-                        <h4 className="font-display font-bold text-sm truncate drop-shadow-sm">
-                          {session.title}
-                        </h4>
-                      </div>
-                    </div>
-
-                    {/* Host Details & Join Action */}
-                    <div className="p-4 space-y-3">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar
-                          url={session.hostAvatar}
-                          name={session.hostName}
-                          size={36}
-                          ring
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-xs text-foreground truncate">
-                            {session.hostName}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground truncate">
-                            @{session.hostHandle}
-                          </div>
+                        <div className="absolute bottom-3 inset-x-3 text-white">
+                          <h4 className="font-display font-bold text-sm truncate drop-shadow-sm">
+                            {session.title}
+                          </h4>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => onJoinAsViewer(session)}
-                        className="w-full py-2.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs shadow-md active:scale-95 transition flex items-center justify-center gap-1.5"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-rose-500" />
-                        <span>Watch Broadcast</span>
-                      </button>
+                      {/* Host Details & Action */}
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar
+                            url={session.hostAvatar}
+                            name={session.hostName}
+                            size={36}
+                            ring
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-xs text-foreground truncate flex items-center gap-1">
+                              <span>{session.hostName}</span>
+                              {isMyBroadcast && (
+                                <span className="text-[10px] text-rose-400 font-semibold">(You)</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              @{session.hostHandle}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isMyBroadcast ? (
+                          <button
+                            type="button"
+                            onClick={() => handleResumeBroadcast(session)}
+                            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 active:scale-95 transition flex items-center justify-center gap-1.5"
+                          >
+                            <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+                            <span>Resume Studio (You Are Live) 🔴</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onJoinAsViewer(session)}
+                            className="w-full py-2.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 hover:bg-zinc-800"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Watch Broadcast</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

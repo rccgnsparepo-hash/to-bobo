@@ -9,7 +9,11 @@ export type DmBroadcastEvent =
   | "user-typing"
   | "duel-invite"
   | "duel-response"
-  | "duel-tap";
+  | "duel-tap"
+  | "incoming-call"
+  | "call-accepted"
+  | "call-declined"
+  | "call-ended";
 
 export interface DuelInvitePayload {
   challengerId: string;

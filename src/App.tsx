@@ -35,6 +35,7 @@ import { NotchNotification } from "@/components/notifications/NotchNotification"
 import { InteractiveMorphToast } from "@/components/ui/InteractiveMorphToast";
 import { DuelChallengeReceiver } from "@/components/duel/DuelChallengeReceiver";
 import { NotificationSoundPrompt } from "@/components/notifications/NotificationSoundPrompt";
+import { GlobalIncomingCallOverlay } from "@/components/chat/GlobalIncomingCallOverlay";
 
 const queryClient = new QueryClient();
 
@@ -256,6 +257,7 @@ export default function App() {
               <InteractiveMorphToast />
               <DuelChallengeReceiver />
               <NotificationSoundPrompt />
+              <GlobalIncomingCallOverlay />
               <AnimatedRoutes />
               <Toaster theme="dark" />
             </TenantProvider>

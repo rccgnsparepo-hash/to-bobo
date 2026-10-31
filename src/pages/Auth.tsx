@@ -24,14 +24,7 @@ import {
 } from "lucide-react";
 import { sendFirebasePasswordReset } from "@/lib/firebaseAuth";
 import { fireAuthConfetti } from "@/lib/confetti";
-import {
-  evaluateRegistrationAttempt,
-  finalizeAccountRegistration,
-  requestRegistrationPermit,
-  type SecurityEvaluation,
-} from "@/lib/securityService";
-import { SecurityChallengeModal } from "@/components/security/SecurityChallengeModal";
-import { SecurityBlockModal } from "@/components/security/SecurityBlockModal";
+import { notificationAudio } from "@/lib/notificationAudio";
 
 type FeedbackState = {
   type: "error" | "success" | "warning" | "info";
@@ -69,9 +62,6 @@ export default function AuthPage() {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
-  const [showSecurityChallenge, setShowSecurityChallenge] = useState(false);
-  const [showSecurityBlock, setShowSecurityBlock] = useState(false);
-  const [latestEvaluation, setLatestEvaluation] = useState<SecurityEvaluation | null>(null);
 
   // Recovery state for resetting password
   const [isRecovery, setIsRecovery] = useState(() => {
@@ -164,7 +154,7 @@ export default function AuthPage() {
     return true;
   };
 
-  const executeSignUp = async (permitToken: string, verifiedPhone?: string) => {
+  const executeSignUp = async () => {
     setBusy(true);
     setStatusStep("Registering profile & secure keys...");
     try {
@@ -204,19 +194,10 @@ export default function AuthPage() {
         }
       }
 
-      // Finalize server-authoritative registration permit & security cluster
-      const accountId = data.user?.id || `acc_${Date.now()}`;
-      await finalizeAccountRegistration({
-        permitToken,
-        accountId,
-        email: email.trim(),
-        handle: cleanHandle || email.split("@")[0].toLowerCase(),
-        phone: verifiedPhone,
-      }).catch((err) => console.warn("Security permit record:", err));
-
-      // Sweet Success animation with confetti burst
+      // Sweet Success animation with confetti burst and Optimus Prime voice
       setIsSuccessAnimated(true);
       fireAuthConfetti();
+      void notificationAudio.playWelcomeToFlickAudio();
 
       setSuccessModal({
         title: "Success!",
@@ -309,14 +290,11 @@ export default function AuthPage() {
 
     setBusy(true);
     setFeedback(null);
-    setStatusStep(mode === "signup" ? "Evaluating security & identity signals..." : "Verifying credentials...");
+    setStatusStep(mode === "signup" ? "Creating your Flick account..." : "Verifying credentials...");
 
     try {
       if (mode === "signup") {
-        setStatusStep("Creating your Flick account...");
-        const cleanHandle = handle.trim().replace(/^@/, "").toLowerCase();
-        const permitToken = `pmt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        await executeSignUp(permitToken);
+        await executeSignUp();
       } else {
         setStatusStep("Authenticating session...");
         const { error } = await supabase.auth.signInWithPassword({
@@ -1013,30 +991,6 @@ export default function AuthPage() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* Security Challenge Modal for Medium/High Risk */}
-      {latestEvaluation && (
-        <SecurityChallengeModal
-          isOpen={showSecurityChallenge}
-          evaluation={latestEvaluation}
-          email={email.trim()}
-          onCancel={() => setShowSecurityChallenge(false)}
-          onSuccess={(permitToken, verifiedPhone) => {
-            setShowSecurityChallenge(false);
-            executeSignUp(permitToken, verifiedPhone);
-          }}
-        />
-      )}
-
-      {/* Security Block Modal for Critical Risk */}
-      {latestEvaluation && (
-        <SecurityBlockModal
-          isOpen={showSecurityBlock}
-          evaluation={latestEvaluation}
-          email={email.trim()}
-          onClose={() => setShowSecurityBlock(false)}
-        />
-      )}
     </main>
   );
 }

@@ -10,6 +10,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { SpaceService } from "@/lib/space/spaceService";
+import { useAuth } from "@/lib/auth";
 import type { LiveBroadcastSession, AudioRoom, ClassroomSession } from "@/lib/space/types";
 
 interface DiscoverViewProps {
@@ -18,6 +19,7 @@ interface DiscoverViewProps {
 }
 
 export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatchLive }) => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<"all" | "live" | "rooms" | "classes">("all");
   const [liveStreams, setLiveStreams] = useState<LiveBroadcastSession[]>([]);
@@ -163,37 +165,59 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatch
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredLive.map((stream) => (
-                <div
-                  key={stream.id}
-                  onClick={() => onWatchLive(stream)}
-                  className="group relative bg-[#14151a] border border-white/5 hover:border-lime-400/50 rounded-2xl p-4 cursor-pointer transition-all hover:scale-[1.01]"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-[10px] font-bold flex items-center gap-1">
-                      <Radio className="w-2.5 h-2.5 animate-pulse" />
-                      LIVE
-                    </span>
-                    <span className="text-[11px] text-zinc-400 flex items-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {stream.viewerCount} watching
-                    </span>
-                  </div>
-
-                  <h4 className="text-sm font-bold text-white line-clamp-1 group-hover:text-lime-400 transition-colors">
-                    {stream.title}
-                  </h4>
-
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
-                    <div className="w-6 h-6 rounded-full bg-lime-400/20 text-lime-400 font-bold text-[10px] flex items-center justify-center">
-                      {stream.hostName.charAt(0).toUpperCase()}
+              {filteredLive.map((stream) => {
+                const isMyLive = user?.id === stream.hostId;
+                return (
+                  <div
+                    key={stream.id}
+                    onClick={() => {
+                      if (isMyLive) {
+                        onSelectTab("live");
+                      } else {
+                        onWatchLive(stream);
+                      }
+                    }}
+                    className={`group relative rounded-2xl p-4 cursor-pointer transition-all hover:scale-[1.01] ${
+                      isMyLive
+                        ? "bg-rose-950/25 border-2 border-rose-500/60 shadow-md shadow-rose-500/10"
+                        : "bg-[#14151a] border border-white/5 hover:border-lime-400/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-[10px] font-bold flex items-center gap-1">
+                          <Radio className="w-2.5 h-2.5 animate-pulse" />
+                          LIVE
+                        </span>
+                        {isMyLive && (
+                          <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            YOUR LIVE (HOST)
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-zinc-400 flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {stream.viewerCount} watching
+                      </span>
                     </div>
-                    <span className="text-xs text-zinc-300 font-medium truncate">
-                      {stream.hostName}
-                    </span>
+
+                    <h4 className="text-sm font-bold text-white line-clamp-1 group-hover:text-lime-400 transition-colors">
+                      {stream.title}
+                    </h4>
+
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
+                      <div className="w-6 h-6 rounded-full bg-lime-400/20 text-lime-400 font-bold text-[10px] flex items-center justify-center">
+                        {stream.hostName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-xs text-zinc-300 font-medium truncate flex items-center gap-1">
+                        <span>{stream.hostName}</span>
+                        {isMyLive && <span className="text-rose-400 font-semibold">(You)</span>}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -229,24 +253,42 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatch
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredRooms.map((room) => (
-                <div
-                  key={room.id}
-                  onClick={() => onSelectTab("rooms")}
-                  className="bg-[#14151a] border border-white/5 hover:border-purple-500/50 rounded-2xl p-4 cursor-pointer transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold">
-                      {room.category.toUpperCase()}
-                    </span>
-                    <span className="text-[11px] text-zinc-400">
-                      {room.speakers.length + room.listeners.length} participants
-                    </span>
+              {filteredRooms.map((room) => {
+                const isMyRoom = user?.id === room.hostId;
+                return (
+                  <div
+                    key={room.id}
+                    onClick={() => onSelectTab("rooms")}
+                    className={`rounded-2xl p-4 cursor-pointer transition-all ${
+                      isMyRoom
+                        ? "bg-purple-950/30 border-2 border-purple-500/60 shadow-md shadow-purple-500/10"
+                        : "bg-[#14151a] border border-white/5 hover:border-purple-500/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold">
+                          {room.category.toUpperCase()}
+                        </span>
+                        {isMyRoom && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            HOSTING (YOU)
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-zinc-400">
+                        {room.speakers.length + room.listeners.length} participants
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white">{room.title}</h4>
+                    <p className="text-xs text-zinc-400 mt-2 flex items-center gap-1">
+                      <span>Hosted by {room.hostName}</span>
+                      {isMyRoom && <span className="text-purple-400 font-semibold">(You)</span>}
+                    </p>
                   </div>
-                  <h4 className="text-sm font-bold text-white">{room.title}</h4>
-                  <p className="text-xs text-zinc-400 mt-2">Hosted by {room.hostName}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

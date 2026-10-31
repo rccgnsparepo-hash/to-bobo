@@ -17,6 +17,9 @@ import {
 import { Avatar } from "@/components/Avatar";
 import { toast } from "sonner";
 
+import { supabase } from "@/integrations/supabase/client";
+import { callService } from "@/lib/callService";
+
 export type CallType = "audio" | "video";
 
 interface ActiveCallModalProps {
@@ -28,12 +31,23 @@ interface ActiveCallModalProps {
     avatar_url: string | null;
   };
   callType: CallType;
+  callId?: string;
+  isInitiator?: boolean;
   onClose: (durationSeconds?: number) => void;
 }
 
-export function ActiveCallModal({ open, peer, callType: initialType, onClose }: ActiveCallModalProps) {
+export function ActiveCallModal({
+  open,
+  peer,
+  callType: initialType,
+  callId,
+  isInitiator = true,
+  onClose,
+}: ActiveCallModalProps) {
   const [callType, setCallType] = useState<CallType>(initialType);
-  const [status, setStatus] = useState<"ringing" | "connecting" | "connected">("ringing");
+  const [status, setStatus] = useState<"ringing" | "connecting" | "connected">(() =>
+    isInitiator ? "ringing" : "connected"
+  );
   const [duration, setDuration] = useState(0);
   const [micMuted, setMicMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(initialType === "audio");
@@ -45,17 +59,18 @@ export function ActiveCallModal({ open, peer, callType: initialType, onClose }: 
   const timerRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const ringOscRef = useRef<OscillatorNode | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Sync initial type when opened
+  // Sync initial type and status when opened
   useEffect(() => {
     if (open) {
       setCallType(initialType);
       setVideoOff(initialType === "audio");
-      setStatus("ringing");
+      setStatus(isInitiator ? "ringing" : "connected");
       setDuration(0);
       setMinimized(false);
     }
-  }, [open, initialType]);
+  }, [open, initialType, isInitiator]);
 
   // Web Audio Ringtone Generator (no external audio files required)
   useEffect(() => {
@@ -105,6 +120,33 @@ export function ActiveCallModal({ open, peer, callType: initialType, onClose }: 
     }
   }, [open, status]);
 
+  // Real-time call signaling channel connection
+  useEffect(() => {
+    if (!open || !callId) return;
+
+    const ch = supabase.channel(`space:call:${callId}`);
+    ch.on("broadcast", { event: "call:accepted" }, () => {
+      setStatus("connected");
+      toast.success("Call connected! 🎙️");
+    })
+      .on("broadcast", { event: "call:declined" }, () => {
+        toast("User was unavailable or declined the call.");
+        onClose(0);
+      })
+      .on("broadcast", { event: "call:ended" }, () => {
+        toast("Call ended by peer.");
+        onClose(duration);
+      })
+      .subscribe();
+
+    channelRef.current = ch;
+
+    return () => {
+      supabase.removeChannel(ch);
+      channelRef.current = null;
+    };
+  }, [open, callId, duration, onClose]);
+
   // Acquire MediaStream (Camera & Microphone)
   useEffect(() => {
     if (!open) return;
@@ -141,22 +183,25 @@ export function ActiveCallModal({ open, peer, callType: initialType, onClose }: 
 
     void initMedia();
 
-    // Auto connect after 2.5 seconds ringing simulation
-    const connectTimer = window.setTimeout(() => {
-      if (!cancelled) {
-        setStatus("connected");
-      }
-    }, 2800);
+    // If not waiting on remote peer or simulating local
+    let connectTimer: number | null = null;
+    if (!callId) {
+      connectTimer = window.setTimeout(() => {
+        if (!cancelled) {
+          setStatus("connected");
+        }
+      }, 2500);
+    }
 
     return () => {
       cancelled = true;
-      window.clearTimeout(connectTimer);
+      if (connectTimer) window.clearTimeout(connectTimer);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
     };
-  }, [open, callType]);
+  }, [open, callType, callId]);
 
   // Duration Timer
   useEffect(() => {
@@ -221,6 +266,9 @@ export function ActiveCallModal({ open, peer, callType: initialType, onClose }: 
     const finalSec = duration;
     const formatted = formatCallDuration(finalSec);
     toast.success(`Call ended · ${formatted}`);
+    if (callId && peer?.id) {
+      void callService.endCall(callId, peer.id, finalSec);
+    }
     onClose(finalSec);
   };
 

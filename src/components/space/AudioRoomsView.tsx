@@ -159,13 +159,15 @@ export function AudioRoomsView() {
     }
     void triggerMediumHaptic();
 
+    const isHost = room.hostId === user.id;
+
     const participant: RoomParticipant = {
       userId: user.id,
-      userName: profile?.display_name || "Listener",
-      userHandle: profile?.handle || "listener",
-      userAvatar: profile?.avatar_url,
-      role: room.hostId === user.id ? "host" : "listener",
-      isMuted: true,
+      userName: profile?.display_name || (isHost ? room.hostName : "Listener"),
+      userHandle: profile?.handle || (isHost ? room.hostHandle : "listener"),
+      userAvatar: profile?.avatar_url || (isHost ? room.hostAvatar : undefined),
+      role: isHost ? "host" : "listener",
+      isMuted: isHost ? false : true,
       isSpeaking: false,
       handRaised: false,
       joinedAt: Date.now(),
@@ -176,7 +178,12 @@ export function AudioRoomsView() {
       ...room,
       participants: [...room.participants.filter((p) => p.userId !== user.id), participant],
     });
-    toast(`Joined "${room.title}" quietly as a listener`);
+
+    if (isHost) {
+      toast.success("Welcome back to your stage as Host! 🎙️");
+    } else {
+      toast(`Joined "${room.title}" quietly as a listener`);
+    }
   };
 
   const handleLeaveRoom = () => {
@@ -430,49 +437,71 @@ export function AudioRoomsView() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {rooms.map((room) => (
-                  <div
-                    key={room.id}
-                    className="p-5 rounded-3xl bg-card border border-border space-y-3.5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="font-bold font-mono text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                          {room.topicTag}
-                        </span>
-                        <span className="text-muted-foreground font-mono flex items-center gap-1">
-                          <Users className="w-3 h-3" />
-                          <span>{room.participants.length} listeners</span>
-                        </span>
-                      </div>
-                      <h4 className="font-display font-bold text-base text-foreground leading-snug">
-                        {room.title}
-                      </h4>
-                    </div>
-
-                    {/* Host & Speaker Thumbnails */}
-                    <div className="flex items-center gap-2">
-                      <Avatar url={room.hostAvatar} name={room.hostName} size={32} />
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-foreground truncate">
-                          Hosted by {room.hostName}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground truncate">
-                          @{room.hostHandle}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleJoinRoom(room)}
-                      className="w-full py-2.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground font-bold text-xs transition active:scale-95 flex items-center justify-center gap-1.5 border border-border"
+                {rooms.map((room) => {
+                  const isMyRoom = user?.id === room.hostId;
+                  return (
+                    <div
+                      key={room.id}
+                      className={`p-5 rounded-3xl space-y-3.5 shadow-sm hover:shadow-md transition flex flex-col justify-between ${
+                        isMyRoom
+                          ? "bg-amber-950/20 border-2 border-amber-500/60 shadow-amber-500/10"
+                          : "bg-card border border-border"
+                      }`}
                     >
-                      <Volume2 className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Join Room</span>
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-1 gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold font-mono text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                              {room.topicTag}
+                            </span>
+                            {isMyRoom && (
+                              <span className="font-bold font-mono text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500 text-black flex items-center gap-1 shadow-sm">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                HOSTING (YOU)
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-muted-foreground font-mono flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            <span>{room.participants.length} listeners</span>
+                          </span>
+                        </div>
+                        <h4 className="font-display font-bold text-base text-foreground leading-snug">
+                          {room.title}
+                        </h4>
+                      </div>
+
+                      {/* Host & Speaker Thumbnails */}
+                      <div className="flex items-center gap-2">
+                        <Avatar url={room.hostAvatar} name={room.hostName} size={32} />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-foreground truncate flex items-center gap-1">
+                            <span>Hosted by {room.hostName}</span>
+                            {isMyRoom && (
+                              <span className="text-[10px] text-amber-400 font-semibold">(You)</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground truncate">
+                            @{room.hostHandle}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleJoinRoom(room)}
+                        className={`w-full py-2.5 rounded-xl font-bold text-xs transition active:scale-95 flex items-center justify-center gap-1.5 border ${
+                          isMyRoom
+                            ? "bg-amber-500 hover:bg-amber-400 text-black border-amber-400 shadow-md shadow-amber-500/25"
+                            : "bg-secondary hover:bg-secondary/80 text-foreground border-border"
+                        }`}
+                      >
+                        <Volume2 className={`w-3.5 h-3.5 ${isMyRoom ? "text-black" : "text-amber-500"}`} />
+                        <span>{isMyRoom ? "Enter Host Stage 🎙️" : "Join Room"}</span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

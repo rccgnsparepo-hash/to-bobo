@@ -12,9 +12,11 @@ import { RecordingsView } from "@/components/space/RecordingsView";
 import { ScheduleView } from "@/components/space/ScheduleView";
 import { DiscoverView } from "@/components/space/DiscoverView";
 import { SpaceService } from "@/lib/space/spaceService";
+import { useAuth } from "@/lib/auth";
 import type { SpaceTab, LiveBroadcastSession } from "@/lib/space/types";
 
 export default function SpacePage() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = (searchParams.get("tab") as SpaceTab) || "live";
 
@@ -63,7 +65,14 @@ export default function SpacePage() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
         {activeTab === "live" && (
           <LiveBroadcastView
-            onJoinAsViewer={(session) => setWatchingSession(session)}
+            onJoinAsViewer={(session) => {
+              if (user && session.hostId === user.id) {
+                // Host returns to broadcaster studio
+                setActiveTab("live");
+              } else {
+                setWatchingSession(session);
+              }
+            }}
             onRequestGoLiveModal={() => setGoLiveModalOpen(true)}
           />
         )}
@@ -83,7 +92,13 @@ export default function SpacePage() {
         {activeTab === "discover" && (
           <DiscoverView
             onSelectTab={handleTabChange}
-            onWatchLive={(broadcast) => setWatchingSession(broadcast)}
+            onWatchLive={(broadcast) => {
+              if (user && broadcast.hostId === user.id) {
+                handleTabChange("live");
+              } else {
+                setWatchingSession(broadcast);
+              }
+            }}
           />
         )}
       </main>

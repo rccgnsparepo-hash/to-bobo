@@ -41,6 +41,7 @@ import { VoiceMessage } from "@/components/VoiceMessage";
 import { notify } from "@/lib/notify";
 import { ChatProfileSheet } from "@/components/ChatProfileSheet";
 import { ActiveCallModal, type CallType } from "@/components/chat/ActiveCallModal";
+import { callService } from "@/lib/callService";
 import { MicPermissionModal } from "@/components/chat/MicPermissionModal";
 import { QuickRepliesBar } from "@/components/chat/QuickRepliesBar";
 import { MediaViewerModal } from "@/components/chat/MediaViewerModal";
@@ -133,10 +134,38 @@ export default function ThreadPage() {
   const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
   const [reactionsMap, setReactionsMap] = useState<Record<string, Record<string, number>>>({});
   const [signed, setSigned] = useState<Record<string, string>>({});
-  const [activeCall, setActiveCall] = useState<{ open: boolean; type: CallType }>({
+  const [activeCall, setActiveCall] = useState<{ open: boolean; type: CallType; callId?: string }>({
     open: false,
     type: "audio",
   });
+
+  const handleStartCall = async (type: CallType) => {
+    if (!other || !user) {
+      toast.error("Contact details loading, please try again");
+      return;
+    }
+    try {
+      const signal = await callService.initiateCall(
+        {
+          id: user.id,
+          name: profile?.display_name || "User",
+          handle: profile?.handle || "user",
+          avatarUrl: profile?.avatar_url,
+        },
+        {
+          id: other.id,
+          name: other.display_name,
+          handle: other.handle,
+          avatarUrl: other.avatar_url,
+        },
+        type
+      );
+      setActiveCall({ open: true, type, callId: signal.callId });
+    } catch (err) {
+      console.warn("Failed to initiate call:", err);
+      setActiveCall({ open: true, type });
+    }
+  };
   const bgInputRef = useRef<HTMLInputElement>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1263,7 +1292,7 @@ export default function ThreadPage() {
 
           {/* Audio Call */}
           <button
-            onClick={() => setActiveCall({ open: true, type: "audio" })}
+            onClick={() => handleStartCall("audio")}
             className="p-2 text-muted-foreground hover:text-snap hover:bg-secondary rounded-full transition"
             title="Start voice call"
             aria-label="Voice call"
@@ -1273,7 +1302,7 @@ export default function ThreadPage() {
 
           {/* Video Call */}
           <button
-            onClick={() => setActiveCall({ open: true, type: "video" })}
+            onClick={() => handleStartCall("video")}
             className="p-2 text-muted-foreground hover:text-snap hover:bg-secondary rounded-full transition"
             title="Start video call"
             aria-label="Video call"
@@ -1335,6 +1364,7 @@ export default function ThreadPage() {
           >
             <Settings2 className="w-4 h-4" />
           </button>
+        </div>
       </header>
 
       {/* Peer Live Stream Alert Banner */}
@@ -2232,7 +2262,7 @@ export default function ThreadPage() {
         peer={other}
         hasWallpaper={Boolean(bg)}
         onSetWallpaper={() => bgInputRef.current?.click()}
-        onStartCall={(type) => setActiveCall({ open: true, type })}
+        onStartCall={(type) => handleStartCall(type)}
         onSearchInChat={() => setShowSearch(true)}
         onDeleted={() => {
           setMsgs([]);
@@ -2244,8 +2274,13 @@ export default function ThreadPage() {
           open={activeCall.open}
           peer={other}
           callType={activeCall.type}
+          callId={activeCall.callId}
+          isInitiator={true}
           onClose={(durationSec) => {
-            setActiveCall((c) => ({ ...c, open: false }));
+            if (activeCall.callId) {
+              callService.endCall(activeCall.callId, other.id);
+            }
+            setActiveCall((c) => ({ ...c, open: false, callId: undefined }));
             if (durationSec && durationSec > 0 && user && userId) {
               const mins = Math.floor(durationSec / 60);
               const secs = durationSec % 60;
