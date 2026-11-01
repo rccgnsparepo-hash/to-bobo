@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   Search,
   Slash,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProfileSettings } from "@/components/ProfileSettings";
@@ -355,8 +356,16 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Edit Profile Button (Right side, pill-shaped as in Image 1) */}
+          {/* Edit Profile & Start a Class Buttons */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/class")}
+              className="py-1.5 px-4 rounded-full bg-[#4a5cff] hover:bg-[#3d4ee6] text-white font-bold text-xs transition active:scale-95 shadow-md flex items-center gap-1.5 border border-white/10"
+              title="Start a Flick Class"
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>Start a class</span>
+            </button>
             <button
               onClick={openEditModal}
               className="py-1.5 px-5 rounded-full border border-white/20 bg-secondary/80 hover:bg-secondary font-bold text-xs text-foreground transition active:scale-95 shadow-sm"

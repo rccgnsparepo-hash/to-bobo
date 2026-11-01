@@ -334,3 +334,36 @@ html {
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
+
+/* Flick Class - Bricolage Grotesque condensed heavy grotesque */
+.font-bricolage {
+  font-family: "Bricolage Grotesque", -apple-system, sans-serif;
+  font-variation-settings: "wdth" 75;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+/* Flick Class - Instrument Serif for Lecturer's notes */
+.font-instrument-serif {
+  font-family: "Instrument Serif", Georgia, serif;
+}
+
+/* Flick Class Lecture App Zone Tokens */
+:root {
+  --class-bg: #0a0a0a;
+  --class-surface: #141417;
+  --class-line: #2a2a32;
+  --class-accent: #4a5cff;
+  --class-live: #ff4f8b;
+  --class-radius: 18px;
+}
+
+@media (prefers-color-scheme: light) {
+  .flick-class-auto-theme {
+    --class-bg: #f8f9fa;
+    --class-surface: #ffffff;
+    --class-line: #e2e4e9;
+    --class-accent: #384bff;
+    --class-live: #e61f68;
+  }
+}

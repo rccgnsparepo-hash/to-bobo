@@ -21,6 +21,7 @@ import {
   Layers,
   Sparkles,
   Radio,
+  GraduationCap,
 } from "lucide-react";
 import { FlickPostModal } from "./post/FlickPostModal";
 import { useAuth } from "@/lib/auth";
@@ -49,6 +50,8 @@ import { initRealtimePushEngine, requestDesktopNotificationPermission } from "@/
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { RightRail } from "./layout/RightRail";
 import { PeepingFlickerMascot } from "./mascot/PeepingFlickerMascot";
+import { CampusStorageService } from "@/lib/class/campusStorageService";
+import type { LiveBridgeEvent } from "@/lib/class/types";
 
 const tabs: { to: string; icon: typeof Home; label: string; center?: boolean; action?: boolean }[] = [
   { to: "/", icon: Home, label: "Home" },
@@ -72,6 +75,19 @@ export function AppShell() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [activeLiveBridge, setActiveLiveBridge] = useState<LiveBridgeEvent | null>(() => {
+    const active = CampusStorageService.getActiveLiveBridges();
+    return active.length > 0 ? active[0] : null;
+  });
+
+  useEffect(() => {
+    const onBridgeUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail as LiveBridgeEvent | null;
+      setActiveLiveBridge(detail || null);
+    };
+    window.addEventListener("flick:lecture-live-bridge", onBridgeUpdate);
+    return () => window.removeEventListener("flick:lecture-live-bridge", onBridgeUpdate);
+  }, []);
 
   useHomeCameraSwipe();
 
@@ -380,6 +396,16 @@ export function AppShell() {
             <span className="hidden xl:inline">Go live</span>
           </Link>
           <Link
+            to="/class"
+            title="Flick Class // Lecture App Zone"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
+              pathname.startsWith("/class") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+            }`}
+          >
+            <GraduationCap className="w-6 h-6 shrink-0 text-[#4a5cff]" />
+            <span className="hidden xl:inline">Class</span>
+          </Link>
+          <Link
             to="/games"
             title="Flick Games"
             className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
@@ -511,6 +537,41 @@ export function AppShell() {
               }
             }}
           >
+            {/* Go Live Bridge: Live Campus Lecture Alert across Flick Social */}
+            {activeLiveBridge && !pathname.startsWith("/class") && (
+              <div className="mb-4">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-[#141417] via-[#1a1324] to-[#141417] border border-[#ff4f8b]/40 shadow-xl flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#ff4f8b] animate-ping shrink-0" />
+                    <div className="truncate">
+                      <span className="font-bold text-white uppercase text-[11px] tracking-wider">
+                        Live Lecture:{" "}
+                      </span>
+                      <span className="text-[#8898ff] font-mono font-bold">
+                        {activeLiveBridge.courseCode} ·{" "}
+                      </span>
+                      <span className="text-zinc-300">
+                        {activeLiveBridge.title} ({activeLiveBridge.level}L)
+                      </span>
+                      <span className="text-zinc-500 text-[11px] ml-1.5 hidden sm:inline">
+                        with {activeLiveBridge.lecturerName}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void triggerLightHaptic();
+                      navigate(`/class/${activeLiveBridge.joinCode}`);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#4a5cff] hover:bg-[#3d4ee0] text-white font-bold text-xs shrink-0 flex items-center gap-1.5 shadow-md shadow-[#4a5cff]/30 active:scale-95 transition cursor-pointer"
+                  >
+                    <span>Bridge to Class</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
             <Outlet />
           </motion.div>
         </AnimatePresence>
@@ -650,6 +711,7 @@ export function AppShell() {
                 </div>
               </button>
               {[
+                { to: "/class", icon: GraduationCap, label: "Flick Class (Lecture Zone)" },
                 { to: "/space", icon: Radio, label: "Go Live & Flick Space" },
                 { to: "/games", icon: Gamepad2, label: "Flick Games (Level Devil)" },
                 { to: "/creator-insights", icon: BarChart3, label: "Creator Insights" },

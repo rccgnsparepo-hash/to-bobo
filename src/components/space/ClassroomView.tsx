@@ -20,12 +20,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { triggerLightHaptic, triggerMediumHaptic } from "@/lib/haptics";
 import { useAuth } from "@/lib/auth";
+import { useNavigate } from "react-router-dom";
 import { SpaceService } from "@/lib/space/spaceService";
 import { WebRtcEngine } from "@/lib/space/webRtcEngine";
 import { Avatar } from "@/components/Avatar";
 import type { ClassroomSession, ClassMaterial } from "@/lib/space/types";
 
 export function ClassroomView() {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [classes, setClasses] = useState<ClassroomSession[]>(() => SpaceService.getClassrooms());
   const [activeLesson, setActiveLesson] = useState<ClassroomSession | null>(null);
@@ -293,6 +295,32 @@ export function ClassroomView() {
       ) : (
         /* ==================== CLASS DIRECTORY & SCHEDULER ==================== */
         <div className="flex-1 w-full h-full overflow-y-auto no-scrollbar p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+          {/* Flick Class Lecture App Zone Launcher Banner */}
+          <div className="rounded-3xl bg-gradient-to-r from-[#141417] via-[#101016] to-[#1a1426] border border-[#4a5cff]/40 p-6 sm:p-7 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-72 h-72 bg-[#4a5cff]/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="space-y-2 text-center sm:text-left max-w-xl relative z-10">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4a5cff]/20 text-[#7a88ff] font-bold text-xs border border-[#4a5cff]/30">
+                <Sparkles className="w-3.5 h-3.5 text-[#ff4f8b]" />
+                <span className="font-mono uppercase tracking-wider text-[11px]">Lecture App Zone</span>
+              </div>
+              <h2 className="font-bricolage text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                Flick Class Live Space
+              </h2>
+              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                Invite-only lecture rooms with warp-transition entrance, synced 16:9 PDF slides, live lecturer typing diffs, and low-latency WebRTC voice.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/class")}
+              className="py-3 px-6 rounded-2xl bg-[#4a5cff] hover:bg-[#3d4ee0] text-white font-bold text-sm shadow-xl shadow-[#4a5cff]/30 hover:scale-[1.02] active:scale-95 transition flex items-center gap-2 shrink-0 relative z-10 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-[#ff4f8b]" />
+              <span>Enter Flick Class</span>
+            </button>
+          </div>
+
           {/* Header Banner */}
           <div className="rounded-3xl bg-gradient-to-r from-blue-950/70 via-zinc-900 to-cyan-950/60 border border-blue-500/30 p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
             <div className="space-y-2 text-center sm:text-left max-w-xl">

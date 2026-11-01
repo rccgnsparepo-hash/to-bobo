@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/AppShell";
 import { PageTransition } from "@/components/PageTransition";
+
+const ClassroomPage = lazy(() => import("@/pages/ClassroomPage"));
 import HomePage from "@/pages/Home";
 import CameraPage from "@/pages/Camera";
 import MessagesPage from "@/pages/Messages";
@@ -195,11 +197,31 @@ function AnimatedRoutes() {
               </PageTransition>
             }
           />
+          <Route
+            path="/class"
+            element={
+              <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a]" />}>
+                <PageTransition>
+                  <ClassroomPage />
+                </PageTransition>
+              </Suspense>
+            }
+          />
+          <Route
+            path="/class/:roomId"
+            element={
+              <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a]" />}>
+                <PageTransition>
+                  <ClassroomPage />
+                </PageTransition>
+              </Suspense>
+            }
+          />
           <Route path="/live" element={<Navigate to="/space?tab=live" replace />} />
           <Route path="/go-live" element={<Navigate to="/space?tab=live" replace />} />
           <Route path="/rooms" element={<Navigate to="/space?tab=rooms" replace />} />
           <Route path="/calls" element={<Navigate to="/space?tab=calls" replace />} />
-          <Route path="/classes" element={<Navigate to="/space?tab=classes" replace />} />
+          <Route path="/classes" element={<Navigate to="/class" replace />} />
           <Route path="/prep" element={<Navigate to="/space?tab=prep" replace />} />
           <Route path="/fashion" element={<Navigate to="/space" replace />} />
           <Route path="/wallpapers" element={<Navigate to="/space" replace />} />

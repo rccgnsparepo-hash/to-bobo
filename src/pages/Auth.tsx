@@ -415,27 +415,40 @@ export default function AuthPage() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail.trim()) return;
+    const cleanEmail = resetEmail.trim();
+    if (!cleanEmail) return;
     setResetBusy(true);
     try {
-      const result = await sendFirebasePasswordReset(resetEmail.trim());
+      const redirectUrl = `${window.location.origin}/auth?type=recovery`;
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: redirectUrl,
+      });
+      if (error) throw error;
+
+      const successMsg = `A secure password reset link has been dispatched to ${cleanEmail}. Please check your inbox to reset your password.`;
       setFeedback({
         type: "success",
-        title: "Password Reset Sent",
-        message: result.message,
+        title: "Password Reset Email Sent",
+        message: successMsg,
       });
       trigger3DToast({
         type: "success",
-        title: "Password Reset Sent",
-        description: result.message,
+        title: "Password Reset Email Sent",
+        description: `Check ${cleanEmail} for your reset link.`,
       });
       setShowForgotModal(false);
       setResetEmail("");
     } catch (err) {
+      const msg = (err as Error).message || "Could not send reset email via Supabase.";
+      setFeedback({
+        type: "error",
+        title: "Password Reset Failed",
+        message: msg,
+      });
       trigger3DToast({
         type: "error",
         title: "Password Reset Failed",
-        description: (err as Error).message || "Could not send reset email.",
+        description: msg,
       });
     } finally {
       setResetBusy(false);
