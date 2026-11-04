@@ -187,16 +187,19 @@ export interface AudioRecording {
 // ==================== 7. SCHEDULE & NATIVE ALARMS ====================
 export interface ScheduledReminder {
   id: string;
-  userId: string;
+  userId?: string;
   title: string;
-  targetType: "live" | "room" | "class" | "prep" | "custom";
+  targetType?: "live" | "room" | "class" | "prep" | "meeting" | "other" | "custom";
+  category?: "live" | "class" | "meeting" | "prep" | "other";
   targetId?: string;
   targetUrl?: string;
   triggerTime: number; // Unix timestamp
-  timezone: string;
-  isRecurring: boolean;
+  scheduledFor: number; // Scheduled timestamp
+  timezone?: string;
+  isRecurring?: boolean;
   recurringPattern?: "daily" | "weekly" | "weekdays";
   isCompleted: boolean;
-  soundEnabled: boolean;
+  soundEnabled?: boolean;
+  playAlarm?: boolean;
   createdAt: number;
 }

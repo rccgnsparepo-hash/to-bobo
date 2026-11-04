@@ -15,6 +15,9 @@ import {
   CornerDownRight,
   Eye,
   Smile,
+  Bookmark,
+  BookmarkCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +43,8 @@ import { detectSocialUrl, resolveSocialEmbed, type SocialEmbed } from "@/lib/soc
 import { SocialEmbedCard } from "@/components/social/SocialEmbedCard";
 import { getFlickViews, recordFlickView, formatFlickViews } from "@/lib/flickViews";
 import { FullEmojiPicker } from "@/components/common/FullEmojiPicker";
+import { isPostBookmarked, toggleBookmark } from "@/lib/bookmarks/bookmarkService";
+import { getMutedKeywords, containsMutedKeyword } from "@/lib/safety/safetyService";
 
 export type PostRow = {
   id: string;
@@ -59,7 +64,15 @@ type Comment = {
   author: { handle: string; display_name: string; avatar_url: string | null } | null;
 };
 
-export function PostCard({ post }: { post: PostRow }) {
+export function PostCard({
+  post,
+  currentUserId,
+  onDeleted,
+}: {
+  post: PostRow;
+  currentUserId?: string;
+  onDeleted?: () => void;
+}) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [likeCount, setLikeCount] = useState(0);
@@ -83,6 +96,40 @@ export function PostCard({ post }: { post: PostRow }) {
   const [socialEmbed, setSocialEmbed] = useState<SocialEmbed | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [viewCount, setViewCount] = useState(() => getFlickViews(post.id, post.created_at, likeCount));
+
+  // Bookmarking & Muted keyword state
+  const [bookmarked, setBookmarked] = useState(false);
+  const [hasMutedWord, setHasMutedWord] = useState(false);
+  const [revealMuted, setRevealMuted] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    isPostBookmarked(user.id, post.id).then(setBookmarked);
+    getMutedKeywords(user.id).then((kws) => {
+      if (kws.length > 0 && containsMutedKeyword(post.content, kws)) {
+        setHasMutedWord(true);
+      }
+    });
+
+    const onBookmarkChange = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d?.postId === post.id) setBookmarked(d.saved);
+      else if (d?.bulk) isPostBookmarked(user.id, post.id).then(setBookmarked);
+    };
+    window.addEventListener("flick:bookmarks-changed", onBookmarkChange);
+    return () => window.removeEventListener("flick:bookmarks-changed", onBookmarkChange);
+  }, [user, post.id, post.content]);
+
+  const handleToggleBookmark = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      toast.error("Please sign in to save bookmarks");
+      return;
+    }
+    const res = await toggleBookmark(user.id, post.id);
+    setBookmarked(res.saved);
+    toast.success(res.saved ? "Saved to your private bookmarks" : "Removed from bookmarks");
+  };
 
   useEffect(() => {
     const v = recordFlickView(post.id, post.created_at, likeCount);
@@ -125,6 +172,7 @@ export function PostCard({ post }: { post: PostRow }) {
         message: "Your flick was permanently removed.",
       });
       toast.success("Flick deleted successfully");
+      onDeleted?.();
       window.dispatchEvent(new CustomEvent("flick:post-deleted", { detail: { id: post.id } }));
     } catch (err: any) {
       toast.error(err.message || "Failed to delete post.");
@@ -432,8 +480,27 @@ export function PostCard({ post }: { post: PostRow }) {
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
-          {post.content && (
-            <p className="mt-1 whitespace-pre-wrap break-anywhere">{post.content}</p>
+          {hasMutedWord && !revealMuted ? (
+            <div className="my-2 p-3 rounded-2xl bg-secondary/60 border border-border/80 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>This flick contains a muted keyword</span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRevealMuted(true);
+                }}
+                className="px-2.5 py-1 rounded-full bg-secondary hover:bg-secondary/80 font-bold text-[11px] text-foreground border border-border"
+              >
+                Reveal
+              </button>
+            </div>
+          ) : (
+            post.content && (
+              <p className="mt-1 whitespace-pre-wrap break-anywhere">{post.content}</p>
+            )
           )}
           {socialEmbed && (
             <div className="mt-2.5">
@@ -558,12 +625,25 @@ export function PostCard({ post }: { post: PostRow }) {
               <span className="text-xs font-semibold">{formatFlickViews(viewCount)}</span>
             </div>
 
+            {/* Bookmark button (private to user) */}
+            <button
+              onClick={handleToggleBookmark}
+              className={`flex items-center gap-1.5 transition ml-auto ${
+                bookmarked ? "text-snap" : "hover:text-snap"
+              }`}
+              title={bookmarked ? "Saved to bookmarks" : "Save to bookmarks"}
+              aria-label={bookmarked ? "Bookmarked" : "Bookmark"}
+            >
+              <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-snap" : ""}`} />
+            </button>
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShareOpen(true);
               }}
-              className="flex items-center gap-1.5 hover:text-snap transition ml-auto"
+              className="flex items-center gap-1.5 hover:text-snap transition"
+              aria-label="Share flick"
             >
               <Share2 className="w-4 h-4" />
             </button>
@@ -584,6 +664,9 @@ export function PostCard({ post }: { post: PostRow }) {
           onShare={() => setShareOpen(true)}
           isAuthor={isAuthor}
           onDelete={() => setConfirmDeleteOpen(true)}
+          authorId={post.author?.id}
+          authorHandle={post.author?.handle}
+          postContent={post.content}
         />
       </motion.article>
 

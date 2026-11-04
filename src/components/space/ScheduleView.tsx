@@ -8,7 +8,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Radio,
-  BookOpen,
+  Users,
+  Phone,
   Volume2,
 } from "lucide-react";
 import { SpaceScheduleEngine } from "@/lib/space/scheduleEngine";
@@ -23,7 +24,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [title, setTitle] = useState("");
   const [dateTime, setDateTime] = useState("");
-  const [category, setCategory] = useState<"live" | "class" | "meeting" | "prep" | "other">("live");
+  const [category, setCategory] = useState<"live" | "room" | "meeting" | "other">("live");
   const [alarmSound, setAlarmSound] = useState(true);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
 
@@ -94,7 +95,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = () => {
             <h2 className="text-xl font-bold text-white tracking-tight">My Schedule & Alarms</h2>
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Personal calendar for live events, classes, meetings, and preparation alarms.
+            Personal calendar for live broadcasts, audio rooms, group calls, and social alarms.
           </p>
         </div>
 
@@ -160,9 +161,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = () => {
                     <div className="flex items-start gap-3">
                       <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
                         {item.category === "live" && <Radio className="w-4 h-4 text-rose-400" />}
-                        {item.category === "class" && <BookOpen className="w-4 h-4 text-blue-400" />}
-                        {item.category === "prep" && <Clock className="w-4 h-4 text-purple-400" />}
-                        {item.category !== "live" && item.category !== "class" && item.category !== "prep" && (
+                        {item.category === "room" && <Users className="w-4 h-4 text-amber-400" />}
+                        {item.category === "meeting" && <Phone className="w-4 h-4 text-purple-400" />}
+                        {item.category !== "live" && item.category !== "room" && item.category !== "meeting" && (
                           <Bell className="w-4 h-4 text-lime-400" />
                         )}
                       </div>
@@ -272,11 +273,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = () => {
                   onChange={(e) => setCategory(e.target.value as any)}
                   className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-lime-400"
                 >
-                  <option value="live">Live Stream</option>
-                  <option value="class">Classroom Lesson</option>
-                  <option value="prep">Prep / Exam Focus</option>
+                  <option value="live">Live Video Stream</option>
+                  <option value="room">Audio Room / Space</option>
                   <option value="meeting">Group Call / Meeting</option>
-                  <option value="other">Personal Reminder</option>
+                  <option value="other">Social Reminder</option>
                 </select>
               </div>
 

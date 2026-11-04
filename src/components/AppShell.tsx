@@ -21,9 +21,11 @@ import {
   Layers,
   Sparkles,
   Radio,
-  GraduationCap,
+  Globe,
+  Compass,
 } from "lucide-react";
 import { FlickPostModal } from "./post/FlickPostModal";
+import { CreateActionSheet } from "./CreateActionSheet";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenantContext";
 import { WorkspaceSwitcherModal } from "./workspace/WorkspaceSwitcherModal";
@@ -50,15 +52,18 @@ import { initRealtimePushEngine, requestDesktopNotificationPermission } from "@/
 import { isNotificationCategoryEnabled } from "@/lib/appPrefs";
 import { RightRail } from "./layout/RightRail";
 import { PeepingFlickerMascot } from "./mascot/PeepingFlickerMascot";
-import { CampusStorageService } from "@/lib/class/campusStorageService";
-import type { LiveBridgeEvent } from "@/lib/class/types";
 
-const tabs: { to: string; icon: typeof Home; label: string; center?: boolean; action?: boolean }[] = [
+export const formatNavBadge = (count: number): string | null => {
+  if (!count || count <= 0) return null;
+  return count > 9 ? "9+" : String(count);
+};
+
+const mobileTabs: { to: string; icon: typeof Home; label: string; center?: boolean; action?: boolean }[] = [
   { to: "/", icon: Home, label: "Home" },
-  { to: "/news", icon: Newspaper, label: "News" },
-  { to: "#post", icon: Plus, label: "Flick", center: true, action: true },
+  { to: "/explore", icon: Compass, label: "Explore" },
+  { to: "#create", icon: Plus, label: "Create", center: true, action: true },
   { to: "/messages", icon: MessageCircle, label: "DMs" },
-  { to: "/profile", icon: User, label: "Me" },
+  { to: "/profile", icon: User, label: "Profile" },
 ];
 
 export function AppShell() {
@@ -74,20 +79,8 @@ export function AppShell() {
   const [unreadDMs, setUnreadDMs] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
   const [postModalOpen, setPostModalOpen] = useState(false);
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
-  const [activeLiveBridge, setActiveLiveBridge] = useState<LiveBridgeEvent | null>(() => {
-    const active = CampusStorageService.getActiveLiveBridges();
-    return active.length > 0 ? active[0] : null;
-  });
-
-  useEffect(() => {
-    const onBridgeUpdate = (e: Event) => {
-      const detail = (e as CustomEvent).detail as LiveBridgeEvent | null;
-      setActiveLiveBridge(detail || null);
-    };
-    window.addEventListener("flick:lecture-live-bridge", onBridgeUpdate);
-    return () => window.removeEventListener("flick:lecture-live-bridge", onBridgeUpdate);
-  }, []);
 
   useHomeCameraSwipe();
 
@@ -112,10 +105,10 @@ export function AppShell() {
   // Pages that manage their own viewport height (no extra main padding/max-width)
   const fullBleed = inThread || isChatRoute;
   // Wide desktops get a secondary contextual column on feed-style routes.
-  const showRail = !fullBleed && ["/", "/news", "/challenges", "/wallpapers", "/fashion", "/games"].includes(pathname);
+  const showRail = !fullBleed && ["/", "/explore", "/news", "/challenges", "/wallpapers", "/fashion", "/games", "/bookmarks"].includes(pathname);
 
   // Top-level tab order for swipe navigation
-  const tabOrder = ["/", "/news", "/messages", "/profile"];
+  const tabOrder = ["/", "/explore", "/messages", "/profile"];
   const currentIdx = tabOrder.findIndex((t) =>
     t === "/" ? pathname === "/" : pathname.startsWith(t),
   );
@@ -341,103 +334,108 @@ export function AppShell() {
           </div>
           <ChevronDown className="hidden xl:block w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition shrink-0" />
         </button>
-        <nav className="flex flex-col gap-1">
-          {tabs.map((t) => {
-            if (t.action) {
-              return (
-                <button
-                  key={t.label}
-                  type="button"
-                  onClick={() => {
-                    void triggerLightHaptic();
-                    setPostModalOpen(true);
-                  }}
-                  title="What's flickering? (Create Post)"
-                  className="flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition bg-snap text-snap-foreground hover:opacity-95 font-bold shadow-md shadow-snap/20 my-1 group"
-                >
-                  <t.icon className="w-6 h-6 shrink-0 text-snap-foreground group-hover:rotate-90 transition-transform duration-200" />
-                  <span className="hidden xl:inline">Flick</span>
-                </button>
-              );
-            }
-            const active = pathname === t.to || (t.to !== "/" && pathname.startsWith(t.to));
-            return (
-              <Link
-                key={t.to}
-                to={t.to}
-                title={t.label}
-                className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition relative ${
-                  active ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
-                }`}
-              >
-                <t.icon className="w-6 h-6 shrink-0" />
-                <span className="hidden xl:inline">{t.label}</span>
-                {t.to === "/messages" && unreadDMs > 0 && (
-                  <span className="absolute top-1.5 right-2 xl:static xl:ml-auto bg-snap text-snap-foreground text-[10px] xl:text-xs font-bold rounded-full px-1.5 xl:px-2 py-0.5 shadow-sm">
-                    {unreadDMs.toLocaleString()}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+        <nav className="flex flex-col gap-1.5" aria-label="Main sidebar">
+          {/* 1. Home */}
           <Link
-            to="/space"
-            title="Go Live & Flick Space"
-            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
-              pathname.startsWith("/space") || pathname.startsWith("/live")
-                ? "bg-secondary font-semibold"
-                : "hover:bg-secondary/60"
+            to="/"
+            title="Home"
+            aria-label="Home"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition focus-visible:ring-2 focus-visible:ring-snap focus:outline-none ${
+              pathname === "/" ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
             }`}
           >
-            <div className="relative shrink-0">
-              <Radio className="w-6 h-6 text-rose-500 animate-pulse" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500" />
-            </div>
-            <span className="hidden xl:inline">Go live</span>
+            <Home className="w-6 h-6 shrink-0" />
+            <span className="hidden xl:inline">Home</span>
           </Link>
+
+          {/* 2. Explore */}
           <Link
-            to="/class"
-            title="Flick Class // Lecture App Zone"
-            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
-              pathname.startsWith("/class") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+            to="/explore"
+            title="Explore"
+            aria-label="Explore"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition focus-visible:ring-2 focus-visible:ring-snap focus:outline-none ${
+              pathname.startsWith("/explore") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
             }`}
           >
-            <GraduationCap className="w-6 h-6 shrink-0 text-[#4a5cff]" />
-            <span className="hidden xl:inline">Class</span>
+            <Compass className="w-6 h-6 shrink-0" />
+            <span className="hidden xl:inline">Explore</span>
           </Link>
+
+          {/* Single Lime "+" button as Create entry */}
+          <button
+            type="button"
+            onClick={() => {
+              void triggerLightHaptic();
+              setCreateSheetOpen(true);
+            }}
+            aria-label="Create: New post, Camera, or Go live"
+            title="Create"
+            className="flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition bg-snap text-snap-foreground hover:opacity-95 font-bold shadow-md shadow-snap/20 my-1 group focus-visible:ring-2 focus-visible:ring-snap focus:outline-none cursor-pointer"
+          >
+            <Plus className="w-6 h-6 shrink-0 text-snap-foreground group-hover:rotate-90 transition-transform duration-200" />
+            <span className="hidden xl:inline">Create</span>
+          </button>
+
+          {/* 3. DMs */}
+          <Link
+            to="/messages"
+            title="Direct Messages"
+            aria-label="Direct Messages"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition relative focus-visible:ring-2 focus-visible:ring-snap focus:outline-none ${
+              pathname.startsWith("/messages") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+            }`}
+          >
+            <MessageCircle className="w-6 h-6 shrink-0" />
+            <span className="hidden xl:inline">DMs</span>
+            {formatNavBadge(unreadDMs) && (
+              <span className="absolute top-1.5 right-2 xl:static xl:ml-auto bg-snap text-snap-foreground text-[10px] xl:text-xs font-bold rounded-full px-1.5 xl:px-2 py-0.5 shadow-sm">
+                {formatNavBadge(unreadDMs)}
+              </span>
+            )}
+          </Link>
+
+          {/* 4. Profile */}
+          <Link
+            to="/profile"
+            title="Profile"
+            aria-label="Profile"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition focus-visible:ring-2 focus-visible:ring-snap focus:outline-none ${
+              pathname.startsWith("/profile") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
+            }`}
+          >
+            <User className="w-6 h-6 shrink-0" />
+            <span className="hidden xl:inline">Profile</span>
+          </Link>
+
+          {/* 5. Notifications */}
+          <button
+            type="button"
+            onClick={() => setInboxOpen(true)}
+            title="Notifications"
+            aria-label="Notifications"
+            className="flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition hover:bg-secondary/60 text-left relative focus-visible:ring-2 focus-visible:ring-snap focus:outline-none cursor-pointer"
+          >
+            <Bell className="w-6 h-6 shrink-0" />
+            <span className="hidden xl:inline">Notifications</span>
+            {formatNavBadge(unread) && (
+              <span className="absolute top-1.5 right-2 xl:static xl:ml-auto bg-snap text-snap-foreground text-[10px] xl:text-xs font-bold rounded-full px-1.5 xl:px-2 py-0.5 shadow-sm">
+                {formatNavBadge(unread)}
+              </span>
+            )}
+          </button>
+
+          {/* 6. Flick Games */}
           <Link
             to="/games"
             title="Flick Games"
-            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
+            aria-label="Flick Games"
+            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition focus-visible:ring-2 focus-visible:ring-snap focus:outline-none ${
               pathname.startsWith("/games") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
             }`}
           >
             <Gamepad2 className="w-6 h-6 shrink-0 text-amber-400" />
             <span className="hidden xl:inline">Flick Games</span>
           </Link>
-          <Link
-            to="/camera"
-            title="Camera"
-            className={`flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition ${
-              pathname.startsWith("/camera") ? "bg-secondary font-semibold" : "hover:bg-secondary/60"
-            }`}
-          >
-            <Camera className="w-6 h-6 shrink-0" />
-            <span className="hidden xl:inline">Camera</span>
-          </Link>
-          <button
-            onClick={() => setInboxOpen(true)}
-            title="Notifications"
-            className="flex items-center justify-center xl:justify-start gap-4 px-3 xl:px-4 py-3 rounded-full text-lg transition hover:bg-secondary/60 text-left relative"
-          >
-            <Bell className="w-6 h-6 shrink-0" />
-            <span className="hidden xl:inline">Notifications</span>
-            {unread > 0 && (
-              <span className="absolute top-1.5 right-2 xl:static xl:ml-auto bg-snap text-snap-foreground text-[10px] xl:text-xs font-bold rounded-full px-1.5 xl:px-2 py-0.5">
-                {unread > 99 ? "99+" : unread}
-              </span>
-            )}
-          </button>
         </nav>
         <div className="mt-auto flex items-center justify-center xl:justify-start gap-3 p-2 xl:p-3 rounded-2xl xl:border border-border">
           <Avatar url={profile?.avatar_url} name={profile?.display_name} size={40} />
@@ -495,13 +493,13 @@ export function AppShell() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setInboxOpen(true)}
-                className="relative w-9 h-9 rounded-full bg-secondary grid place-items-center"
+                className="relative w-9 h-9 rounded-full bg-secondary grid place-items-center focus-visible:ring-2 focus-visible:ring-snap focus:outline-none"
                 aria-label="Notifications"
               >
                 <Bell className="w-4 h-4" />
-                {unread > 0 && (
+                {formatNavBadge(unread) && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-snap text-snap-foreground text-[10px] font-bold grid place-items-center">
-                    {unread > 99 ? "99+" : unread}
+                    {formatNavBadge(unread)}
                   </span>
                 )}
               </button>
@@ -537,41 +535,6 @@ export function AppShell() {
               }
             }}
           >
-            {/* Go Live Bridge: Live Campus Lecture Alert across Flick Social */}
-            {activeLiveBridge && !pathname.startsWith("/class") && (
-              <div className="mb-4">
-                <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-[#141417] via-[#1a1324] to-[#141417] border border-[#ff4f8b]/40 shadow-xl flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#ff4f8b] animate-ping shrink-0" />
-                    <div className="truncate">
-                      <span className="font-bold text-white uppercase text-[11px] tracking-wider">
-                        Live Lecture:{" "}
-                      </span>
-                      <span className="text-[#8898ff] font-mono font-bold">
-                        {activeLiveBridge.courseCode} ·{" "}
-                      </span>
-                      <span className="text-zinc-300">
-                        {activeLiveBridge.title} ({activeLiveBridge.level}L)
-                      </span>
-                      <span className="text-zinc-500 text-[11px] ml-1.5 hidden sm:inline">
-                        with {activeLiveBridge.lecturerName}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void triggerLightHaptic();
-                      navigate(`/class/${activeLiveBridge.joinCode}`);
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#4a5cff] hover:bg-[#3d4ee0] text-white font-bold text-xs shrink-0 flex items-center gap-1.5 shadow-md shadow-[#4a5cff]/30 active:scale-95 transition cursor-pointer"
-                  >
-                    <span>Bridge to Class</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
             <Outlet />
           </motion.div>
         </AnimatePresence>
@@ -580,19 +543,19 @@ export function AppShell() {
       {/* Optional right rail — only when there is genuine horizontal room */}
       {showRail && <RightRail />}
 
-      {/* Mobile/tablet floating dock */}
+      {/* Mobile/tablet floating 5-item bottom dock: Home, Explore, "+", DMs, Profile */}
       {chrome && (
-        <nav className="lg:hidden fixed bottom-4 inset-x-3 z-40 pointer-events-none">
+        <nav className="lg:hidden fixed bottom-4 inset-x-3 z-40 pointer-events-none" aria-label="Mobile navigation bar">
           <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-auto mx-auto max-w-md card-glass rounded-[28px] px-2 py-1.5 grid grid-cols-6 items-center shadow-[0_20px_50px_-15px_rgba(0,0,0,0.8)]"
+            className="pointer-events-auto mx-auto max-w-md card-glass rounded-[28px] px-2 py-1.5 grid grid-cols-5 items-center shadow-[0_20px_50px_-15px_rgba(0,0,0,0.8)]"
             style={{
               background: "linear-gradient(160deg, rgba(20,22,28,0.92), rgba(8,9,12,0.88))",
             }}
           >
-            {tabs.map((t) => {
+            {mobileTabs.map((t) => {
               const active =
                 pathname === t.to ||
                 (!t.action && t.to !== "/" && pathname.startsWith(t.to));
@@ -603,10 +566,11 @@ export function AppShell() {
                     type="button"
                     onClick={() => {
                       void triggerLightHaptic();
-                      setPostModalOpen(true);
+                      setCreateSheetOpen(true);
                     }}
-                    className="flex flex-col items-center -mt-7 relative group"
-                    title="What's flickering? (Create Post)"
+                    aria-label="Create: New post, Camera, or Go live"
+                    className="flex flex-col items-center -mt-7 relative group focus-visible:ring-2 focus-visible:ring-snap focus:outline-none"
+                    title="Create"
                   >
                     <motion.div
                       whileTap={{ scale: 0.9 }}
@@ -616,7 +580,7 @@ export function AppShell() {
                           "radial-gradient(circle at 30% 30%, oklch(0.95 0.18 130), oklch(0.7 0.22 150))",
                       }}
                     >
-                      <t.icon className="w-6 h-6 text-snap-foreground" />
+                      <Plus className="w-6 h-6 text-snap-foreground" />
                     </motion.div>
                     <span className="text-[9px] uppercase tracking-wider mt-1 text-foreground/80 font-bold">
                       {t.label}
@@ -628,6 +592,7 @@ export function AppShell() {
                 <Link
                   key={t.to}
                   to={t.to}
+                  aria-label={t.label}
                   data-coach={
                     t.to === "/messages"
                       ? "coach-dm"
@@ -635,15 +600,17 @@ export function AppShell() {
                         ? "coach-profile"
                         : undefined
                   }
-                  className={`relative flex flex-col items-center gap-1 py-2.5 transition ${active ? "text-foreground" : "text-muted-foreground/70"}`}
+                  className={`relative flex flex-col items-center gap-1 py-2.5 transition focus-visible:ring-2 focus-visible:ring-snap focus:outline-none ${
+                    active ? "text-foreground" : "text-muted-foreground/70"
+                  }`}
                 >
                   <motion.div whileTap={{ scale: 0.85 }} className="relative">
                     <t.icon
                       className={`w-5 h-5 ${active ? "drop-shadow-[0_0_8px_rgba(180,255,80,0.7)]" : ""}`}
                     />
-                    {t.to === "/messages" && unreadDMs > 0 && (
+                    {t.to === "/messages" && formatNavBadge(unreadDMs) && (
                       <span className="absolute -top-1 -right-2 min-w-[15px] h-[15px] px-1 rounded-full bg-snap text-snap-foreground text-[9px] font-bold grid place-items-center shadow-sm">
-                        {unreadDMs.toLocaleString()}
+                        {formatNavBadge(unreadDMs)}
                       </span>
                     )}
                   </motion.div>
@@ -658,15 +625,6 @@ export function AppShell() {
                 </Link>
               );
             })}
-            <button
-              onClick={() => setMoreOpen(true)}
-              className="relative flex flex-col items-center gap-1 py-2.5 text-muted-foreground/70"
-            >
-              <motion.div whileTap={{ scale: 0.85 }}>
-                <MoreHorizontal className="w-5 h-5" />
-              </motion.div>
-              <span className="text-[9px] uppercase tracking-wider">More</span>
-            </button>
           </motion.div>
         </nav>
       )}
@@ -711,7 +669,7 @@ export function AppShell() {
                 </div>
               </button>
               {[
-                { to: "/class", icon: GraduationCap, label: "Flick Class (Lecture Zone)" },
+                { to: "/world", icon: Globe, label: "Flick World" },
                 { to: "/space", icon: Radio, label: "Go Live & Flick Space" },
                 { to: "/games", icon: Gamepad2, label: "Flick Games (Level Devil)" },
                 { to: "/creator-insights", icon: BarChart3, label: "Creator Insights" },
@@ -775,6 +733,11 @@ export function AppShell() {
         onClose={() => setWorkspaceModalOpen(false)}
       />
       <FlickPostModal open={postModalOpen} onClose={() => setPostModalOpen(false)} />
+      <CreateActionSheet
+        open={createSheetOpen}
+        onClose={() => setCreateSheetOpen(false)}
+        onOpenPost={() => setPostModalOpen(true)}
+      />
       <GlobalAudioOverlay />
       <PeepingFlickerMascot />
     </div>

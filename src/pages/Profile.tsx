@@ -23,7 +23,8 @@ import {
   ArrowLeft,
   Search,
   Slash,
-  GraduationCap,
+  Radio,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProfileSettings } from "@/components/ProfileSettings";
@@ -303,6 +304,14 @@ export default function ProfilePage() {
 
         <div className="flex items-center gap-1">
           <button
+            onClick={() => navigate("/settings/privacy")}
+            aria-label="Privacy Center"
+            title="Privacy Center"
+            className="w-9 h-9 rounded-full hover:bg-secondary grid place-items-center transition text-muted-foreground hover:text-snap"
+          >
+            <ShieldCheck className="w-4 h-4" />
+          </button>
+          <button
             onClick={shareProfile}
             aria-label="Share profile"
             className="w-9 h-9 rounded-full hover:bg-secondary grid place-items-center transition text-muted-foreground hover:text-foreground"
@@ -359,12 +368,12 @@ export default function ProfilePage() {
           {/* Edit Profile & Start a Class Buttons */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigate("/class")}
-              className="py-1.5 px-4 rounded-full bg-[#4a5cff] hover:bg-[#3d4ee6] text-white font-bold text-xs transition active:scale-95 shadow-md flex items-center gap-1.5 border border-white/10"
-              title="Start a Flick Class"
+              onClick={() => navigate("/space?tab=live")}
+              className="py-1.5 px-4 rounded-full bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs transition active:scale-95 shadow-md flex items-center gap-1.5 border border-white/10"
+              title="Go live on Flick Space"
             >
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Start a class</span>
+              <Radio className="w-3.5 h-3.5 animate-pulse" />
+              <span>Go live</span>
             </button>
             <button
               onClick={openEditModal}

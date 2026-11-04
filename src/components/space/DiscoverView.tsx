@@ -3,7 +3,6 @@ import {
   Search,
   Radio,
   Users,
-  BookOpen,
   Sparkles,
   ArrowRight,
   Filter,
@@ -11,7 +10,7 @@ import {
 } from "lucide-react";
 import { SpaceService } from "@/lib/space/spaceService";
 import { useAuth } from "@/lib/auth";
-import type { LiveBroadcastSession, AudioRoom, ClassroomSession } from "@/lib/space/types";
+import type { LiveBroadcastSession, AudioRoom } from "@/lib/space/types";
 
 interface DiscoverViewProps {
   onSelectTab: (tab: any) => void;
@@ -21,10 +20,9 @@ interface DiscoverViewProps {
 export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatchLive }) => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFilter, setSelectedFilter] = useState<"all" | "live" | "rooms" | "classes">("all");
+  const [selectedFilter, setSelectedFilter] = useState<"all" | "live" | "rooms">("all");
   const [liveStreams, setLiveStreams] = useState<LiveBroadcastSession[]>([]);
   const [audioRooms, setAudioRooms] = useState<AudioRoom[]>([]);
-  const [classes, setClasses] = useState<ClassroomSession[]>([]);
 
   useEffect(() => {
     // Subscribe to live broadcast updates
@@ -36,9 +34,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatch
     const unsubRooms = SpaceService.subscribeToRooms((rooms) => {
       setAudioRooms(rooms);
     });
-
-    // Fetch classes
-    SpaceService.getActiveClassrooms().then(setClasses);
 
     return () => {
       unsubLive();
@@ -57,10 +52,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatch
     query ? r.title.toLowerCase().includes(query) || r.hostName.toLowerCase().includes(query) : true
   );
 
-  const filteredClasses = classes.filter((c) =>
-    query ? c.title.toLowerCase().includes(query) || c.teacherName.toLowerCase().includes(query) : true
-  );
-
   return (
     <div className="space-y-6">
       {/* Search & Filter Header */}
@@ -71,7 +62,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatch
             Discover Flick Space
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
-            Explore live video broadcasts, conversational audio spaces, real-time online classes, and study groups.
+            Explore live video broadcasts, conversational audio spaces, and social hangouts.
           </p>
         </div>
 
@@ -119,17 +110,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatch
             >
               <Users className="w-3 h-3" />
               Audio Rooms ({audioRooms.length})
-            </button>
-            <button
-              onClick={() => setSelectedFilter("classes")}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                selectedFilter === "classes"
-                  ? "bg-blue-500 text-white"
-                  : "bg-white/5 text-zinc-400 hover:text-white"
-              }`}
-            >
-              <BookOpen className="w-3 h-3" />
-              Classes ({classes.length})
             </button>
           </div>
         </div>
@@ -294,58 +274,6 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectTab, onWatch
         </div>
       )}
 
-      {/* Classes Section */}
-      {(selectedFilter === "all" || selectedFilter === "classes") && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-blue-400" />
-              Live & Upcoming Online Classes ({filteredClasses.length})
-            </h3>
-            {filteredClasses.length > 0 && (
-              <button
-                onClick={() => onSelectTab("classes")}
-                className="text-xs text-lime-400 hover:underline flex items-center gap-1"
-              >
-                Classroom Hub <ArrowRight className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-
-          {filteredClasses.length === 0 ? (
-            <div className="p-6 rounded-2xl bg-[#0f1014] border border-white/5 text-center">
-              <p className="text-xs text-zinc-400">No scheduled classes at this moment.</p>
-              <button
-                onClick={() => onSelectTab("classes")}
-                className="mt-2 text-xs text-blue-400 font-bold hover:underline"
-              >
-                Schedule or Start a Class &rarr;
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredClasses.map((cls) => (
-                <div
-                  key={cls.id}
-                  onClick={() => onSelectTab("classes")}
-                  className="bg-[#14151a] border border-white/5 hover:border-blue-500/50 rounded-2xl p-4 cursor-pointer transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold">
-                      {cls.subject}
-                    </span>
-                    <span className="text-[11px] text-zinc-400">
-                      {cls.enrolledStudents.length} enrolled
-                    </span>
-                  </div>
-                  <h4 className="text-sm font-bold text-white">{cls.title}</h4>
-                  <p className="text-xs text-zinc-400 mt-2">Instructor: {cls.teacherName}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

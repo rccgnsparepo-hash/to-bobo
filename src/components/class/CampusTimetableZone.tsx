@@ -6,7 +6,6 @@ import {
   Plus,
   Radio,
   MapPin,
-  Database,
   ArrowRight,
   X,
 } from "lucide-react";
@@ -17,7 +16,6 @@ import type {
   AcademicLevel,
   AcademicProfile,
   CampusTimetableSlot,
-  CampusStorageQuota,
 } from "@/lib/class/types";
 
 interface Props {
@@ -44,9 +42,6 @@ export function CampusTimetableZone({
   );
   const [selectedDay, setSelectedDay] = useState<string>("Monday");
   const [timetable, setTimetable] = useState<CampusTimetableSlot[]>([]);
-  const [storageQuota, setStorageQuota] = useState<CampusStorageQuota>(() =>
-    CampusStorageService.getStorageQuota()
-  );
 
   // Modal for lecturer adding slot
   const [showAddModal, setShowAddModal] = useState(false);
@@ -59,14 +54,11 @@ export function CampusTimetableZone({
   useEffect(() => {
     const load = () => {
       setTimetable(CampusStorageService.getTimetable(selectedLevel, selectedDay));
-      setStorageQuota(CampusStorageService.getStorageQuota());
     };
     load();
     window.addEventListener("flick:campus-timetable-updated", load);
-    window.addEventListener("flick:campus-storage-updated", load);
     return () => {
       window.removeEventListener("flick:campus-timetable-updated", load);
-      window.removeEventListener("flick:campus-storage-updated", load);
     };
   }, [selectedLevel, selectedDay]);
 
@@ -101,39 +93,6 @@ export function CampusTimetableZone({
 
   return (
     <div className="space-y-6">
-      {/* 30GB Multi-Tenant Storage Quota Bar */}
-      <div className="rounded-[18px] bg-[#141417] border border-[#2a2a32] p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#4a5cff]/15 text-[#4a5cff] grid place-items-center">
-            <Database className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-white flex items-center gap-2">
-              <span>Campus Multi-Tenant Lecture Storage</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#4a5cff]/20 text-[#8898ff]">
-                Dedicated 30 GB Model
-              </span>
-            </div>
-            <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
-              {CampusStorageService.formatBytes(storageQuota.usedBytes)} used of 30.00 GB · {storageQuota.slidesCount} slides stored
-            </div>
-          </div>
-        </div>
-
-        {/* Storage Progress Meter */}
-        <div className="w-full sm:w-64 space-y-1">
-          <div className="flex justify-between text-[10px] font-mono text-zinc-400">
-            <span>Quota Utilized</span>
-            <span>{storageQuota.percentUsed.toFixed(1)}%</span>
-          </div>
-          <div className="w-full h-2 rounded-full bg-black/60 border border-[#2a2a32] overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-[#4a5cff] to-[#ff4f8b] rounded-full transition-all duration-500"
-              style={{ width: `${Math.max(1, storageQuota.percentUsed)}%` }}
-            />
-          </div>
-        </div>
-      </div>
 
       {/* Level Selector Tabs (100L to 600L) */}
       <div className="space-y-2">

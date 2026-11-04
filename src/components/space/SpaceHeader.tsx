@@ -1,4 +1,4 @@
-import { Radio, Users, Phone, GraduationCap, BookOpen, Mic, Calendar, Compass, ArrowLeft, Plus } from "lucide-react";
+import { Radio, Users, Phone, Mic, Calendar, Compass, ArrowLeft, Plus } from "lucide-react";
 import { triggerLightHaptic, triggerMediumHaptic } from "@/lib/haptics";
 import { useNavigate } from "react-router-dom";
 import type { SpaceTab } from "@/lib/space/types";
@@ -24,8 +24,6 @@ export function SpaceHeader({
     { id: "live", label: "Live", icon: Radio, badge: activeLiveCount, livePulse: activeLiveCount > 0 },
     { id: "rooms", label: "Rooms", icon: Users, badge: activeRoomsCount },
     { id: "calls", label: "Calls", icon: Phone },
-    { id: "classes", label: "Classes", icon: GraduationCap },
-    { id: "prep", label: "Prep Class", icon: BookOpen },
     { id: "recordings", label: "Recordings", icon: Mic },
     { id: "schedule", label: "My Schedule", icon: Calendar },
     { id: "discover", label: "Discover", icon: Compass },
@@ -55,7 +53,7 @@ export function SpaceHeader({
               </span>
             </div>
             <p className="text-[10px] text-muted-foreground hidden sm:block">
-              Live broadcast, audio rooms, virtual classes & recordings
+              Live broadcasts, audio rooms, group calls & social spaces
             </p>
           </div>
         </div>

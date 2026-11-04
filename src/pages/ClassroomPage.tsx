@@ -11,7 +11,6 @@ import {
   Users,
   Compass,
   School,
-  Database,
   Radio,
   LogOut,
   UserCheck,

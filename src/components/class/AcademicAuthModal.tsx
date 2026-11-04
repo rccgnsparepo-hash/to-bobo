@@ -8,7 +8,6 @@ import {
   Hash,
   School,
   ArrowRight,
-  Database,
   AlertTriangle,
   X,
   Eye,
@@ -673,15 +672,6 @@ export function AcademicAuthModal({
             </form>
           </>
         )}
-
-        {/* Multi-Tenant 30GB Footer */}
-        <div className="pt-2 border-t border-[#2a2a32] flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-          <div className="flex items-center gap-1.5">
-            <Database className="w-3.5 h-3.5 text-[#4a5cff]" />
-            <span>Dedicated 30.00 GB Modal Architecture</span>
-          </div>
-          <span className="text-[#8898ff] font-bold">Partitioned by College</span>
-        </div>
       </div>
     </div>
   );

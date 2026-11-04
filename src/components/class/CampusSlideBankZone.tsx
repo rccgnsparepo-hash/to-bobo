@@ -13,7 +13,6 @@ import {
   X,
   Sparkles,
   RefreshCw,
-  HardDrive,
 } from "lucide-react";
 import { toast } from "sonner";
 import { triggerLightHaptic, triggerMediumHaptic } from "@/lib/haptics";
@@ -272,7 +271,7 @@ export function CampusSlideBankZone({ profile, onLaunchDeckInLiveRoom }: Props) 
                       {deck.courseCode} · {deck.level}L
                     </span>
                     <span className="text-zinc-400 text-[11px] font-mono">
-                      {deck.totalPages} pages · {CampusStorageService.formatBytes(deck.fileSizeBytes)}
+                      {deck.totalPages} slides
                     </span>
                   </div>
 

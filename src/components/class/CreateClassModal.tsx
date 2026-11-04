@@ -214,9 +214,6 @@ export function CreateClassModal({
                   onChange={handleFileUpload}
                 />
               </div>
-              <p className="text-[11px] text-zinc-500 mt-1 font-mono">
-                Stored within dedicated 30.00 GB Lecture quota.
-              </p>
             </div>
 
             {/* Permissions Toggles */}

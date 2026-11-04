@@ -7,7 +7,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/AppShell";
 import { PageTransition } from "@/components/PageTransition";
 
-const ClassroomPage = lazy(() => import("@/pages/ClassroomPage"));
+const WorldPage = lazy(() => import("@/pages/WorldPage"));
+const ExplorePage = lazy(() => import("@/pages/Explore"));
+const PrivacyCenterPage = lazy(() => import("@/pages/PrivacyCenter"));
+const BookmarksPage = lazy(() => import("@/pages/Bookmarks"));
+const AdminModerationPage = lazy(() => import("@/pages/AdminModerationPage"));
 import HomePage from "@/pages/Home";
 import CameraPage from "@/pages/Camera";
 import MessagesPage from "@/pages/Messages";
@@ -166,13 +170,48 @@ function AnimatedRoutes() {
             }
           />
           <Route
-            path="/news"
+            path="/explore"
             element={
-              <PageTransition>
-                <NewsPage />
-              </PageTransition>
+              <Suspense fallback={<div className="min-h-screen bg-background" />}>
+                <PageTransition>
+                  <ExplorePage />
+                </PageTransition>
+              </Suspense>
             }
           />
+          <Route
+            path="/settings/privacy"
+            element={
+              <Suspense fallback={<div className="min-h-screen bg-background" />}>
+                <PageTransition>
+                  <PrivacyCenterPage />
+                </PageTransition>
+              </Suspense>
+            }
+          />
+          <Route path="/privacy" element={<Navigate to="/settings/privacy" replace />} />
+          <Route
+            path="/bookmarks"
+            element={
+              <Suspense fallback={<div className="min-h-screen bg-background" />}>
+                <PageTransition>
+                  <BookmarksPage />
+                </PageTransition>
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/moderation"
+            element={
+              <Suspense fallback={<div className="min-h-screen bg-background" />}>
+                <PageTransition>
+                  <AdminModerationPage />
+                </PageTransition>
+              </Suspense>
+            }
+          />
+          <Route path="/me" element={<Navigate to="/profile" replace />} />
+          <Route path="/news" element={<Navigate to="/?tab=following" replace />} />
           <Route
             path="/news/read"
             element={
@@ -197,31 +236,14 @@ function AnimatedRoutes() {
               </PageTransition>
             }
           />
-          <Route
-            path="/class"
-            element={
-              <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a]" />}>
-                <PageTransition>
-                  <ClassroomPage />
-                </PageTransition>
-              </Suspense>
-            }
-          />
-          <Route
-            path="/class/:roomId"
-            element={
-              <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a]" />}>
-                <PageTransition>
-                  <ClassroomPage />
-                </PageTransition>
-              </Suspense>
-            }
-          />
+          <Route path="/world" element={<Navigate to="/explore" replace />} />
+          <Route path="/class" element={<Navigate to="/explore" replace />} />
+          <Route path="/class/:roomId" element={<Navigate to="/explore" replace />} />
+          <Route path="/classes" element={<Navigate to="/explore" replace />} />
           <Route path="/live" element={<Navigate to="/space?tab=live" replace />} />
           <Route path="/go-live" element={<Navigate to="/space?tab=live" replace />} />
           <Route path="/rooms" element={<Navigate to="/space?tab=rooms" replace />} />
           <Route path="/calls" element={<Navigate to="/space?tab=calls" replace />} />
-          <Route path="/classes" element={<Navigate to="/class" replace />} />
           <Route path="/prep" element={<Navigate to="/space?tab=prep" replace />} />
           <Route path="/fashion" element={<Navigate to="/space" replace />} />
           <Route path="/wallpapers" element={<Navigate to="/space" replace />} />

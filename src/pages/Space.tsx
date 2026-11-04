@@ -6,8 +6,6 @@ import { LiveWatchView } from "@/components/space/LiveWatchView";
 import { GoLiveModal } from "@/components/space/GoLiveModal";
 import { AudioRoomsView } from "@/components/space/AudioRoomsView";
 import { CallsView } from "@/components/space/CallsView";
-import { ClassroomView } from "@/components/space/ClassroomView";
-import { PrepClassView } from "@/components/space/PrepClassView";
 import { RecordingsView } from "@/components/space/RecordingsView";
 import { ScheduleView } from "@/components/space/ScheduleView";
 import { DiscoverView } from "@/components/space/DiscoverView";
@@ -80,10 +78,6 @@ export default function SpacePage() {
         {activeTab === "rooms" && <AudioRoomsView />}
 
         {activeTab === "calls" && <CallsView />}
-
-        {activeTab === "classes" && <ClassroomView />}
-
-        {activeTab === "prep" && <PrepClassView />}
 
         {activeTab === "recordings" && <RecordingsView />}
 

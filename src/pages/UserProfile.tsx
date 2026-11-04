@@ -3,8 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar } from "@/components/Avatar";
 import { PostCard, type PostRow } from "@/components/PostCard";
-import { ArrowLeft, MessageCircle, UserPlus, Check, Swords, Radio, Mic } from "lucide-react";
-import { motion } from "framer-motion";
+import { ArrowLeft, MessageCircle, UserPlus, Check, Swords, Radio, Mic, MoreHorizontal, UserX, VolumeX, Flag, Share2, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import {
   getFlickingUserIds,
@@ -23,6 +23,8 @@ import { DuelModal } from "@/components/duel/DuelModal";
 import { SpaceService } from "@/lib/space/spaceService";
 import { LiveWatchView } from "@/components/space/LiveWatchView";
 import type { LiveBroadcastSession } from "@/lib/space/types";
+import { blockUser, muteUser } from "@/lib/safety/safetyService";
+import { ReportModal } from "@/components/safety/ReportModal";
 
 type Profile = { id: string; handle: string; display_name: string; avatar_url: string | null; bio: string | null };
 
@@ -41,6 +43,8 @@ export default function UserProfilePage() {
   const [duelOpen, setDuelOpen] = useState(false);
   const [watchingLiveModal, setWatchingLiveModal] = useState<LiveBroadcastSession | null>(null);
   const [, setLiveTick] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     const onLiveSync = () => setLiveTick((t) => t + 1);
@@ -154,6 +158,16 @@ export default function UserProfilePage() {
             </h1>
             <p className="text-[11px] text-muted-foreground leading-none">@{p.handle} · {counts.flicks} {counts.flicks === 1 ? "flick" : "flicks"}</p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setMoreOpen(true)}
+            aria-label="Profile safety options"
+            className="w-9 h-9 rounded-full hover:bg-secondary grid place-items-center transition text-muted-foreground hover:text-foreground"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+          </button>
         </div>
       </header>
 
@@ -368,6 +382,105 @@ export default function UserProfilePage() {
         <LiveWatchView
           session={watchingLiveModal}
           onClose={() => setWatchingLiveModal(null)}
+        />
+      )}
+
+      {/* Profile Safety Actions Sheet */}
+      <AnimatePresence>
+        {moreOpen && p && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Profile actions"
+            onClick={() => setMoreOpen(false)}
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full sm:max-w-sm card-glass rounded-t-[32px] sm:rounded-3xl p-5 pb-8 space-y-3"
+            >
+              <div className="flex items-center justify-between pb-1">
+                <span className="font-bold text-sm text-foreground">
+                  Options for @{p.handle}
+                </span>
+                <button
+                  onClick={() => setMoreOpen(false)}
+                  className="p-1 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1 text-sm divide-y divide-border/60">
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(window.location.href);
+                    toast.success("Profile link copied");
+                    setMoreOpen(false);
+                  }}
+                  className="w-full flex items-center gap-3 py-3 text-left hover:text-snap transition"
+                >
+                  <Share2 className="w-4 h-4 text-muted-foreground" />
+                  <span>Share profile</span>
+                </button>
+
+                {user?.id !== p.id && (
+                  <>
+                    <button
+                      onClick={async () => {
+                        if (!user) return;
+                        await muteUser(user.id, p.id);
+                        toast.success(`Muted @${p.handle}`);
+                        setMoreOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 py-3 text-left hover:text-foreground transition"
+                    >
+                      <VolumeX className="w-4 h-4 text-muted-foreground" />
+                      <span>Mute @{p.handle}</span>
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        if (!user) return;
+                        await blockUser(user.id, p.id);
+                        toast.success(`Blocked @${p.handle}`);
+                        setMoreOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 py-3 text-left hover:text-foreground transition"
+                    >
+                      <UserX className="w-4 h-4 text-muted-foreground" />
+                      <span>Block @{p.handle}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setMoreOpen(false);
+                        setReportOpen(true);
+                      }}
+                      className="w-full flex items-center gap-3 py-3 text-left text-destructive font-semibold hover:bg-destructive/10 px-1 rounded-xl transition"
+                    >
+                      <Flag className="w-4 h-4" />
+                      <span>Report profile</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Report Modal */}
+      {p && (
+        <ReportModal
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          targetType="profile"
+          targetId={p.id}
+          targetSnippet={`@${p.handle} (${p.display_name})`}
         />
       )}
     </>

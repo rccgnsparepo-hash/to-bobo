@@ -42,6 +42,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const targetPostId = searchParams.get("post");
+  const tabParam = searchParams.get("tab");
 
   const [posts, setPosts] = useState<PostRow[]>(() => {
     const cached = getOfflineFeed();
@@ -50,7 +51,16 @@ export default function HomePage() {
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [viewer, setViewer] = useState<{ groups: StoryGroup[]; index: number } | null>(null);
   const [watchingLiveSession, setWatchingLiveSession] = useState<LiveBroadcastSession | null>(null);
-  const [chip, setChip] = useState<typeof CHIPS[number]>("For You");
+  const [chip, setChip] = useState<typeof CHIPS[number]>(() => {
+    if (tabParam?.toLowerCase() === "following") return "Following";
+    return "For You";
+  });
+
+  useEffect(() => {
+    if (tabParam?.toLowerCase() === "following") {
+      setChip("Following");
+    }
+  }, [tabParam]);
   const [query, setQuery] = useState("");
   const [people, setPeople] = useState<{ id: string; handle: string; display_name: string; avatar_url: string | null }[]>([]);
   const [suggested, setSuggested] = useState<{ id: string; handle: string; display_name: string; avatar_url: string | null; bio: string | null }[]>([]);
